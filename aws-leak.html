@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWSLeak — Find Your Wasted AWS Money</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+:root {
+  --bg: #0D0D0D;
+  --surface: #161616;
+  --surface2: #1E1E1E;
+  --border: #2A2A2A;
+  --aws: #FF9900;
+  --aws2: #FFB84D;
+  --aws-dark: #C47600;
+  --danger: #FF4444;
+  --warn: #FFD700;
+  --ok: #00E676;
+  --text: #F0F0F0;
+  --muted: #777;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Barlow', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 90% 10%, rgba(255,153,0,0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 10% 90%, rgba(255,153,0,0.05) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Diagonal stripe pattern */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 40px,
+    rgba(255,153,0,0.015) 40px,
+    rgba(255,153,0,0.015) 41px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.container { max-width: 980px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+/* OWNERSHIP BAR */
+.ownership-bar {
+  background: rgba(255,153,0,0.08);
+  border-bottom: 1px solid rgba(255,153,0,0.2);
+  padding: 7px 0;
+  text-align: center;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--muted);
+}
+.ownership-bar strong { color: var(--aws); }
+
+/* HEADER */
+header {
+  padding: 32px 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo { display: flex; align-items: center; gap: 12px; }
+
+.logo-icon {
+  width: 40px; height: 40px;
+  background: var(--aws);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 4px 16px rgba(255,153,0,0.4);
+}
+
+.logo-text { font-size: 24px; font-weight: 900; letter-spacing: -0.5px; }
+.logo-text span { color: var(--aws); }
+
+.header-right { display: flex; align-items: center; gap: 12px; }
+
+.aws-badge {
+  background: rgba(255,153,0,0.1);
+  border: 1px solid rgba(255,153,0,0.3);
+  color: var(--aws);
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* HERO */
+.hero { padding: 48px 0 40px; text-align: center; }
+
+.hero-tag {
+  display: inline-block;
+  background: rgba(255,68,68,0.1);
+  border: 1px solid rgba(255,68,68,0.4);
+  color: #FF7070;
+  padding: 5px 16px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  animation: blink-border 2s ease-in-out infinite;
+}
+
+@keyframes blink-border {
+  0%,100% { border-color: rgba(255,68,68,0.4); }
+  50% { border-color: rgba(255,68,68,0.9); box-shadow: 0 0 12px rgba(255,68,68,0.2); }
+}
+
+.hero h1 {
+  font-size: clamp(38px, 6vw, 68px);
+  font-weight: 900;
+  line-height: 1.0;
+  letter-spacing: -2px;
+  margin-bottom: 16px;
+}
+
+.hero h1 .orange { color: var(--aws); }
+.hero h1 .red {
+  background: linear-gradient(135deg, var(--danger), var(--warn));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero p { color: var(--muted); font-size: 17px; max-width: 500px; margin: 0 auto 32px; line-height: 1.6; font-weight: 400; }
+
+.stats-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; }
+
+.stat-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 24px;
+  text-align: center;
+  border-top: 2px solid var(--aws);
+}
+
+.stat-val { font-size: 26px; font-weight: 900; color: var(--aws); font-family: 'JetBrains Mono', monospace; }
+.stat-lbl { font-size: 11px; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* TOOL */
+.tool-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 32px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+
+.tool-tabs { display: flex; background: var(--bg); border-bottom: 1px solid var(--border); }
+
+.ttab {
+  flex: 1; padding: 14px;
+  background: transparent; border: none;
+  color: var(--muted);
+  font-family: 'Barlow', sans-serif;
+  font-size: 12px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s;
+  text-transform: uppercase; letter-spacing: 1px;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.ttab.active { color: var(--aws); border-bottom-color: var(--aws); }
+
+.tab-body { display: none; padding: 28px; }
+.tab-body.active { display: block; }
+
+.lbl { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+
+textarea {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text);
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  padding: 16px; resize: vertical; min-height: 200px;
+  outline: none; transition: border-color 0.2s; line-height: 1.6;
+}
+textarea:focus { border-color: var(--aws); }
+textarea::placeholder { color: #444; }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+
+.fg { display: flex; flex-direction: column; gap: 6px; }
+.fg label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.fg input, .fg select {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'Barlow', sans-serif; font-size: 14px;
+  padding: 10px 14px; outline: none; transition: border-color 0.2s;
+}
+.fg input:focus, .fg select:focus { border-color: var(--aws); }
+.fg select option { background: var(--bg); }
+
+.add-btn {
+  width: 100%; padding: 11px;
+  background: rgba(255,153,0,0.08); border: 1px dashed rgba(255,153,0,0.4);
+  color: var(--aws); font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 700;
+  cursor: pointer; border-radius: 8px; transition: all 0.2s;
+}
+.add-btn:hover { background: rgba(255,153,0,0.15); }
+
+.resources-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+.res-item {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  animation: fadeUp 0.2s ease;
+}
+@keyframes fadeUp { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+
+.res-info { display: flex; flex-direction: column; gap: 2px; }
+.res-name { font-size: 14px; font-weight: 700; }
+.res-meta { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); }
+.res-cost { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--warn); }
+.res-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px 8px; margin-left: 8px; transition: color 0.2s; }
+.res-del:hover { color: var(--danger); }
+
+.scan-btn {
+  display: block; width: 100%; padding: 18px; margin-top: 20px;
+  background: var(--aws);
+  border: none; border-radius: 12px; color: #000;
+  font-family: 'Barlow', sans-serif; font-size: 16px; font-weight: 900;
+  letter-spacing: 0.5px; cursor: pointer; transition: all 0.2s;
+  text-transform: uppercase;
+}
+.scan-btn:hover { background: var(--aws2); transform: translateY(-1px); box-shadow: 0 8px 28px rgba(255,153,0,0.4); }
+
+/* LOADING */
+.loading { display: none; text-align: center; padding: 56px 28px; }
+.loading.show { display: block; }
+
+.spinner {
+  width: 72px; height: 72px;
+  border: 3px solid var(--border); border-top-color: var(--aws);
+  border-radius: 50%; margin: 0 auto 20px;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.load-text { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--aws); }
+.load-steps { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.load-step { font-size: 12px; color: var(--muted); opacity: 0; transition: opacity 0.3s; font-family: 'JetBrains Mono', monospace; }
+.load-step.on { opacity: 1; color: var(--ok); }
+
+/* RESULTS */
+#results { display: none; }
+
+.results-summary {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 28px; margin-bottom: 20px;
+  border-top: 3px solid var(--aws);
+}
+
+.rs-title { font-size: 20px; font-weight: 900; margin-bottom: 6px; }
+.rs-sub { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+
+.savings-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+
+.sc {
+  border-radius: 10px; padding: 16px; text-align: center; border: 1px solid;
+}
+.sc.crit { background: rgba(255,68,68,0.08); border-color: rgba(255,68,68,0.3); }
+.sc.warn { background: rgba(255,215,0,0.08); border-color: rgba(255,215,0,0.3); }
+.sc.info { background: rgba(255,153,0,0.08); border-color: rgba(255,153,0,0.3); }
+.sc.total { background: rgba(0,230,118,0.08); border-color: rgba(0,230,118,0.3); }
+
+.sc-val { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; }
+.sc.crit .sc-val { color: var(--danger); }
+.sc.warn .sc-val { color: var(--warn); }
+.sc.info .sc-val { color: var(--aws); }
+.sc.total .sc-val { color: var(--ok); }
+.sc-lbl { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* PRIORITY */
+.priority-box {
+  background: rgba(255,68,68,0.06); border: 1px solid rgba(255,68,68,0.25);
+  border-radius: 16px; padding: 24px; margin-bottom: 20px;
+}
+.priority-title { font-size: 15px; font-weight: 800; color: #FF7070; margin-bottom: 16px; }
+.action-list { display: flex; flex-direction: column; gap: 10px; }
+.action-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; background: rgba(0,0,0,0.3); border-radius: 8px; }
+.action-num { background: var(--danger); color: white; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; font-family: 'JetBrains Mono', monospace; }
+.action-txt { font-size: 13px; color: var(--text); line-height: 1.5; }
+.action-save { font-weight: 700; color: var(--ok); }
+
+/* LEAK CARDS */
+.leaks { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+
+.lcard { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; animation: fadeUp 0.3s ease; }
+.lcard-head { display: flex; align-items: center; padding: 16px 20px; gap: 14px; cursor: pointer; transition: background 0.2s; }
+.lcard-head:hover { background: var(--surface2); }
+
+.sdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.lcard.critical .sdot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+.lcard.warning .sdot { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+.lcard.info .sdot { background: var(--aws); }
+
+.lcard-info { flex: 1; }
+.lcard-title { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.lcard-res { font-size: 12px; font-family: 'JetBrains Mono', monospace; color: var(--muted); }
+
+.lcard-savings { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; }
+.lcard.critical .lcard-savings { color: var(--danger); }
+.lcard.warning .lcard-savings { color: var(--warn); }
+.lcard.info .lcard-savings { color: var(--aws); }
+
+.sbadge { padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; font-family: 'JetBrains Mono', monospace; }
+.lcard.critical .sbadge { background: rgba(255,68,68,0.15); color: var(--danger); }
+.lcard.warning .sbadge { background: rgba(255,215,0,0.15); color: var(--warn); }
+.lcard.info .sbadge { background: rgba(255,153,0,0.15); color: var(--aws); }
+
+.lcard-body { padding: 0 20px 16px 44px; display: none; }
+.lcard-body.open { display: block; }
+.lcard-desc { font-size: 13px; color: #9A9A9A; line-height: 1.6; margin-bottom: 12px; }
+.fix-box { background: var(--bg); border-radius: 8px; padding: 14px; border: 1px solid var(--border); }
+.fix-ttl { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--ok); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+.fix-step { display: flex; gap: 10px; font-size: 13px; color: var(--muted); margin-bottom: 6px; line-height: 1.5; }
+.fix-n { color: var(--aws); font-family: 'JetBrains Mono', monospace; font-size: 11px; flex-shrink: 0; margin-top: 2px; }
+
+/* CTA */
+.cta-strip {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid rgba(255,153,0,0.4);
+  border-radius: 20px; padding: 32px;
+  margin-bottom: 24px; overflow: hidden;
+}
+.cta-strip::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--aws), var(--aws2), var(--aws));
+  background-size: 200%; animation: shimmer 2s linear infinite;
+}
+@keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+
+.cta-inner { display: flex; gap: 28px; align-items: center; }
+.cta-left { flex: 1; }
+.cta-eyebrow { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--aws); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
+.cta-title { font-size: 24px; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 8px; }
+.cta-sub { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 14px; max-width: 400px; }
+.cta-bullets { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.cta-bullet { font-size: 12px; color: var(--text); font-weight: 600; }
+
+.cta-right { display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 200px; flex-shrink: 0; }
+.cta-save-box { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; text-align: center; width: 100%; }
+.cta-save-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; font-family: 'JetBrains Mono', monospace; }
+.cta-save-val { font-size: 28px; font-weight: 700; color: var(--ok); font-family: 'JetBrains Mono', monospace; }
+.cta-save-ann { font-size: 12px; color: var(--muted); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+.cta-email-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 14px 20px;
+  background: var(--aws); border: none; border-radius: 10px;
+  color: #000; font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 800;
+  cursor: pointer; text-decoration: none; text-align: center;
+  transition: all 0.2s; animation: pulse-aws 2.5s ease-in-out infinite;
+}
+@keyframes pulse-aws { 0%,100%{box-shadow:0 4px 20px rgba(255,153,0,0.3)} 50%{box-shadow:0 4px 30px rgba(255,153,0,0.6)} }
+.cta-email-btn:hover { background: var(--aws2); transform: translateY(-2px); animation: none; }
+.cta-email-lbl { font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); }
+
+/* TIPS */
+.tips-section { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 32px; }
+.tips-title { font-size: 15px; font-weight: 800; margin-bottom: 16px; color: var(--aws); }
+.tips-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.tip { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.tip-icon { font-size: 18px; margin-bottom: 6px; }
+.tip-text { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.tip-text strong { color: var(--text); }
+
+.reset-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: transparent; border: 1px solid var(--border);
+  color: var(--muted); padding: 9px 18px; border-radius: 8px;
+  font-family: 'Barlow', sans-serif; font-size: 13px;
+  cursor: pointer; transition: all 0.2s; margin-bottom: 28px;
+}
+.reset-btn:hover { border-color: var(--aws); color: var(--aws); }
+
+.export-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.exp-btn {
+  flex: 1; min-width: 130px; padding: 12px 18px; border-radius: 10px;
+  font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; text-align: center; border: 1px solid;
+}
+.exp-btn.primary { background: var(--aws); border-color: var(--aws); color: #000; }
+.exp-btn.secondary { background: transparent; border-color: var(--border); color: var(--text); }
+.exp-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+
+footer { border-top: 1px solid var(--border); padding: 20px 0; text-align: center; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--muted); }
+footer strong { color: var(--aws); }
+footer a { color: var(--aws); text-decoration: none; }
+
+@media (max-width: 600px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .cta-inner { flex-direction: column; }
+  .cta-right { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<div class="ownership-bar">
+  AWSLeak™ &nbsp;|&nbsp; © 2026 <strong>Sinduja Kalla</strong> &nbsp;|&nbsp; All Rights Reserved &nbsp;|&nbsp; Original Tool — Unauthorised Use Prohibited
+</div>
+
+<div class="container">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">💸</div>
+      <div class="logo-text">AWS<span>Leak</span></div>
+    </div>
+    <div class="header-right">
+      <div class="aws-badge">Free Tool</div>
+      <div class="aws-badge" style="background:rgba(0,230,118,0.1);border-color:rgba(0,230,118,0.3);color:var(--ok)">AWS Cost Detector</div>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-tag">⚠ AWS Cost Waste Detector</div>
+    <h1>Your AWS Bill Is<br><span class="red">Burning Cash</span></h1>
+    <p>Paste your AWS resource list or add manually. Find idle EC2s, forgotten S3 buckets, orphaned EBS volumes, unused Elastic IPs and more — instantly.</p>
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-val">~35%</div>
+        <div class="stat-lbl">Avg AWS Waste</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">$24K</div>
+        <div class="stat-lbl">Avg Annual Leak</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">11</div>
+        <div class="stat-lbl">Leak Patterns</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tool-wrap" id="inputSection">
+    <div class="tool-tabs">
+      <button class="ttab active" onclick="switchTab('manual')">🔧 Manual Entry</button>
+      <button class="ttab" onclick="switchTab('paste')">📋 Paste CSV/JSON</button>
+      <button class="ttab" onclick="switchTab('demo')">🚀 Demo</button>
+    </div>
+
+    <div id="tab-manual" class="tab-body active">
+      <p class="lbl">Add your AWS resources</p>
+      <div class="form-grid">
+        <div class="fg"><label>Resource Name</label><input type="text" id="resName" placeholder="e.g. prod-web-server" /></div>
+        <div class="fg"><label>Resource Type</label>
+          <select id="resType">
+            <option value="">Select...</option>
+            <option value="ec2">EC2 Instance</option>
+            <option value="ebs">EBS Volume</option>
+            <option value="eip">Elastic IP</option>
+            <option value="rds">RDS Database</option>
+            <option value="s3">S3 Bucket</option>
+            <option value="elb">Load Balancer (ELB/ALB)</option>
+            <option value="nat">NAT Gateway</option>
+            <option value="snapshot">EBS Snapshot</option>
+            <option value="lambda">Lambda Function</option>
+            <option value="elasticache">ElastiCache</option>
+            <option value="redshift">Redshift Cluster</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="fg"><label>Monthly Cost (USD)</label><input type="number" id="resCost" placeholder="e.g. 180" /></div>
+        <div class="fg"><label>Status</label>
+          <select id="resStatus">
+            <option value="running">Running / Active</option>
+            <option value="stopped">Stopped</option>
+            <option value="unused">Unused / Orphaned</option>
+            <option value="low">Low Utilisation (&lt;10%)</option>
+            <option value="oversized">Oversized</option>
+            <option value="old">Old / Stale</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="fg"><label>Region</label>
+          <select id="resRegion">
+            <option value="us-east-1">us-east-1 (N. Virginia)</option>
+            <option value="us-west-2">us-west-2 (Oregon)</option>
+            <option value="eu-west-1">eu-west-1 (Ireland)</option>
+            <option value="eu-west-2">eu-west-2 (London)</option>
+            <option value="ap-southeast-1">ap-southeast-1 (Singapore)</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="fg"><label>Instance Type (optional)</label><input type="text" id="resSku" placeholder="e.g. m5.2xlarge" /></div>
+      </div>
+      <button class="add-btn" onclick="addResource()">+ Add Resource</button>
+      <div class="resources-list" id="resourcesList"></div>
+    </div>
+
+    <div id="tab-paste" class="tab-body">
+      <p class="lbl">Paste AWS resource data (CSV, JSON, or plain text)</p>
+      <textarea id="pasteInput" placeholder='Examples:
+
+CSV:
+Name,Type,Cost,Status
+prod-web-01,EC2,320,running-low
+orphan-ebs-01,EBS,45,unattached
+old-snapshot-q1,Snapshot,22,old
+
+JSON:
+[{"name":"prod-db","type":"rds","cost":480,"status":"oversized"}]'></textarea>
+    </div>
+
+    <div id="tab-demo" class="tab-body">
+      <p class="lbl">Demo: Typical AWS waste scenario</p>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);line-height:1.9">
+        <span style="color:var(--ok)">// TechCorp AWS Account (demo)</span><br>
+        prod-web-01 → m5.2xlarge → $320/mo → CPU avg 3%<br>
+        dev-server-02 → t3.large → $140/mo → STOPPED 3 weeks<br>
+        orphan-ebs-001 → gp3 500GB → $45/mo → UNATTACHED<br>
+        orphan-ebs-002 → io1 200GB → $110/mo → UNATTACHED<br>
+        old-snapshot-q123 → EBS Snapshot → $28/mo → 18 months old<br>
+        idle-eip-03 → Elastic IP → $4/mo → NOT ASSOCIATED<br>
+        dev-alb-01 → ALB → $22/mo → no targets<br>
+        prod-rds-staging → db.r5.2xlarge → $560/mo → staging only<br>
+        nat-gw-unused → NAT Gateway → $95/mo → no traffic<br>
+        Total: <span style="color:var(--warn)">$1,324/mo</span>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-top:10px">Click Scan to see how much of this is wasted.</p>
+    </div>
+
+    <div style="padding:0 28px 28px">
+      <button class="scan-btn" onclick="runScan()">🔍 SCAN FOR AWS LEAKS</button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loadingSection">
+    <div class="spinner"></div>
+    <div class="load-text">Scanning AWS environment...</div>
+    <div class="load-steps">
+      <div class="load-step" id="s1">✓ Detecting stopped EC2 instances still billing</div>
+      <div class="load-step" id="s2">✓ Scanning orphaned EBS volumes</div>
+      <div class="load-step" id="s3">✓ Checking unassociated Elastic IPs</div>
+      <div class="load-step" id="s4">✓ Analysing oversized RDS instances</div>
+      <div class="load-step" id="s5">✓ Calculating total savings potential</div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <button class="reset-btn" onclick="resetTool()">← New Scan</button>
+
+    <div class="results-summary">
+      <div class="rs-title" id="resTitle">Analysis Complete</div>
+      <div class="rs-sub" id="resSub"></div>
+      <div class="savings-cards" id="savingsCards"></div>
+    </div>
+
+    <div class="priority-box">
+      <div class="priority-title">🔥 Top Priority Actions</div>
+      <div class="action-list" id="priorityActions"></div>
+    </div>
+
+    <div class="leaks" id="leaksContainer"></div>
+
+    <!-- CTA -->
+    <div class="cta-strip">
+      <div class="cta-inner">
+        <div class="cta-left">
+          <div class="cta-eyebrow">💼 AWS & Azure Certified Engineer — Available Now</div>
+          <div class="cta-title">Want me to fix this for you?</div>
+          <div class="cta-sub">I'll personally audit your AWS environment, fix every leak, and set up cost guardrails so you never waste money again.</div>
+          <div class="cta-bullets">
+            <div class="cta-bullet">✅ AZ-104 & AZ-305 Certified</div>
+            <div class="cta-bullet">✅ Fixed in 24–48 hours</div>
+            <div class="cta-bullet">✅ Full audit report</div>
+            <div class="cta-bullet">✅ No fix = No charge</div>
+          </div>
+        </div>
+        <div class="cta-right">
+          <div class="cta-save-box">
+            <div class="cta-save-lbl">Your potential savings</div>
+            <div class="cta-save-val" id="ctaSaveVal">$0/mo</div>
+            <div class="cta-save-ann" id="ctaSaveAnn">$0/year</div>
+          </div>
+          <a class="cta-email-btn" href="" id="ctaEmailBtn" target="_blank">✉ Email Me to Fix This</a>
+          <div class="cta-email-lbl">sindujakalla@gmail.com</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tips-section">
+      <div class="tips-title">💡 AWS Cost Hygiene Tips</div>
+      <div class="tips-grid">
+        <div class="tip"><div class="tip-icon">⏰</div><div class="tip-text"><strong>Auto-stop dev EC2s</strong> — Use Instance Scheduler to stop non-prod instances at night. Saves 60%.</div></div>
+        <div class="tip"><div class="tip-icon">💰</div><div class="tip-text"><strong>Reserved Instances</strong> — 1-year RIs save ~40%, 3-year ~60% vs on-demand. Use for stable workloads.</div></div>
+        <div class="tip"><div class="tip-icon">📊</div><div class="tip-text"><strong>AWS Cost Explorer</strong> — Enable and review weekly. Set budget alerts at 80% and 100%.</div></div>
+        <div class="tip"><div class="tip-icon">🔄</div><div class="tip-text"><strong>Right-size monthly</strong> — Check AWS Trusted Advisor recommendations every month.</div></div>
+        <div class="tip"><div class="tip-icon">🗑️</div><div class="tip-text"><strong>S3 lifecycle rules</strong> — Auto-transition old objects to Glacier. Saves 70% on storage costs.</div></div>
+        <div class="tip"><div class="tip-icon">🏷️</div><div class="tip-text"><strong>Tag everything</strong> — Enforce Owner/Project/Env tags via AWS Config rules to track spend.</div></div>
+      </div>
+    </div>
+
+    <div class="export-row">
+      <button class="exp-btn primary" onclick="exportReport()">📄 Export Report</button>
+      <button class="exp-btn secondary" onclick="copyReport()">📋 Copy as Text</button>
+      <button class="exp-btn secondary" onclick="resetTool()">🔄 New Scan</button>
+    </div>
+  </div>
+
+  <div class="tips-section" id="howSection" style="margin-top:32px">
+    <div class="tips-title">How AWSLeak Works</div>
+    <div class="tips-grid">
+      <div class="tip"><div class="tip-icon">1️⃣</div><div class="tip-text"><strong>Add resources</strong> manually or paste from AWS Cost Explorer / Billing Console export.</div></div>
+      <div class="tip"><div class="tip-icon">2️⃣</div><div class="tip-text"><strong>Instant scan</strong> against 11 AWS cost leak patterns — idle, orphaned, oversized, and more.</div></div>
+      <div class="tip"><div class="tip-icon">3️⃣</div><div class="tip-text"><strong>Get exact savings</strong> with step-by-step AWS Console fix instructions. Export PDF report.</div></div>
+    </div>
+  </div>
+
+  <footer>
+    AWSLeak™ — © 2026 <strong>Sinduja Kalla</strong>. All Rights Reserved. &nbsp;|&nbsp; Original tool. Unauthorised copying prohibited. &nbsp;|&nbsp; <a href="mailto:sindujakalla@gmail.com">sindujakalla@gmail.com</a>
+  </footer>
+</div>
+
+<script>
+let resources = [];
+let activeTab = 'manual';
+
+function switchTab(t) {
+  activeTab = t;
+  document.querySelectorAll('.ttab').forEach((b,i)=>b.classList.toggle('active',['manual','paste','demo'][i]===t));
+  document.querySelectorAll('.tab-body').forEach(c=>c.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+}
+
+function addResource() {
+  const name=document.getElementById('resName').value.trim();
+  const type=document.getElementById('resType').value;
+  const cost=parseFloat(document.getElementById('resCost').value);
+  const status=document.getElementById('resStatus').value;
+  const region=document.getElementById('resRegion').value;
+  const sku=document.getElementById('resSku').value.trim();
+  if(!name||!type||isNaN(cost)){alert('Fill in Name, Type and Cost.');return;}
+  resources.push({id:Date.now(),name,type,cost,status,region,sku});
+  renderList();
+  document.getElementById('resName').value='';
+  document.getElementById('resCost').value='';
+  document.getElementById('resSku').value='';
+  document.getElementById('resType').value='';
+}
+
+function removeResource(id){resources=resources.filter(r=>r.id!==id);renderList();}
+
+function renderList(){
+  const el=document.getElementById('resourcesList');
+  el.innerHTML=resources.map(r=>`
+    <div class="res-item">
+      <div class="res-info">
+        <div class="res-name">${r.name}</div>
+        <div class="res-meta">${r.type.toUpperCase()} · ${r.region} · ${r.sku||'—'} · ${r.status}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <div class="res-cost">$${r.cost}/mo</div>
+        <button class="res-del" onclick="removeResource(${r.id})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+const DEMO=[
+  {id:1,name:'prod-web-01',type:'ec2',cost:320,status:'low',region:'us-east-1',sku:'m5.2xlarge'},
+  {id:2,name:'dev-server-02',type:'ec2',cost:140,status:'stopped',region:'us-east-1',sku:'t3.large'},
+  {id:3,name:'orphan-ebs-001',type:'ebs',cost:45,status:'unused',region:'us-east-1',sku:'gp3 500GB'},
+  {id:4,name:'orphan-ebs-002',type:'ebs',cost:110,status:'unused',region:'us-east-1',sku:'io1 200GB'},
+  {id:5,name:'old-snapshot-q123',type:'snapshot',cost:28,status:'old',region:'us-east-1',sku:''},
+  {id:6,name:'idle-eip-03',type:'eip',cost:4,status:'unused',region:'us-east-1',sku:''},
+  {id:7,name:'dev-alb-01',type:'elb',cost:22,status:'unused',region:'us-east-1',sku:''},
+  {id:8,name:'prod-rds-staging',type:'rds',cost:560,status:'oversized',region:'us-east-1',sku:'db.r5.2xlarge'},
+  {id:9,name:'nat-gw-unused',type:'nat',cost:95,status:'unused',region:'us-east-1',sku:''},
+];
+
+const RULES=[
+  {id:'stopped-ec2',check:r=>r.type==='ec2'&&r.status==='stopped',severity:'critical',
+   title:r=>`Stopped EC2 still billing: ${r.name}`,savings:r=>r.cost*0.9,
+   desc:r=>`"${r.name}" is stopped but still incurring EBS storage, Elastic IP, and data transfer costs. A stopped EC2 is nearly free only if you also release its EIP and delete unused EBS volumes.`,
+   fixes:['Go to EC2 Console → Instances → select instance','If unneeded: Terminate instance (check "Delete EBS on termination")','Release any associated Elastic IP addresses','If needed later: Create an AMI first, then terminate']},
+  {id:'orphan-ebs',check:r=>r.type==='ebs'&&(r.status==='unused'||r.status==='stopped'),severity:'critical',
+   title:r=>`Orphaned EBS Volume: ${r.name}`,savings:r=>r.cost,
+   desc:r=>`"${r.name}" is an EBS volume not attached to any EC2 instance. AWS charges full price for unattached volumes regardless of whether they contain data.`,
+   fixes:['EC2 Console → Elastic Block Store → Volumes → filter "available"','Create snapshot if data needed: aws ec2 create-snapshot --volume-id <id>','Delete volume: aws ec2 delete-volume --volume-id <id>','Enable AWS Config rule "ec2-volume-inuse-check" to auto-alert']},
+  {id:'orphan-eip',check:r=>r.type==='eip'&&r.status==='unused',severity:'warning',
+   title:r=>`Unassociated Elastic IP: ${r.name}`,savings:r=>r.cost,
+   desc:r=>`"${r.name}" is an Elastic IP not associated with a running instance. AWS charges ~$3.60/month per idle EIP. Small alone but they accumulate fast.`,
+   fixes:['EC2 Console → Network & Security → Elastic IPs','Filter for "not associated"','Release address: aws ec2 release-address --allocation-id <id>','Use auto-assign public IPs instead of EIPs for non-production']},
+  {id:'oversized-ec2',check:r=>r.type==='ec2'&&(r.status==='low'||r.status==='oversized'),severity:'warning',
+   title:r=>`Oversized EC2 — right-size opportunity: ${r.name}`,savings:r=>r.cost*0.5,
+   desc:r=>`"${r.name}" has very low CPU/memory utilisation. AWS Trusted Advisor commonly flags this. Moving from m5.2xlarge to m5.large saves ~75% with same workload performance for most apps.`,
+   fixes:['Check CloudWatch CPU/memory metrics for 14+ days','Use AWS Compute Optimizer for specific right-sizing recommendation','Stop instance → change instance type → start again (takes 2 minutes)','Consider Savings Plans or Reserved Instances after right-sizing']},
+  {id:'oversized-rds',check:r=>r.type==='rds'&&(r.status==='oversized'||r.status==='low'),severity:'critical',
+   title:r=>`Oversized RDS Instance: ${r.name}`,savings:r=>r.cost*0.55,
+   desc:r=>`"${r.name}" is likely over-provisioned. RDS is one of AWS's most expensive services per unit. db.r5.2xlarge for a staging/dev database is extreme overkill.`,
+   fixes:['RDS Console → select DB → Modify','Change to smaller instance class (e.g. db.t3.medium for dev)','Use Aurora Serverless v2 for variable workloads — scales to zero','For dev: stop RDS instance during off-hours (saves 60-70%)']},
+  {id:'idle-elb',check:r=>r.type==='elb'&&r.status==='unused',severity:'warning',
+   title:r=>`Idle Load Balancer: ${r.name}`,savings:r=>r.cost,
+   desc:r=>`"${r.name}" has no registered targets or is receiving no traffic. ALBs/ELBs charge per hour + per LCU regardless of traffic volume.`,
+   fixes:['EC2 Console → Load Balancers → check Target Groups','If no targets: Delete the load balancer','Also delete associated Target Groups and ACM certificates if unused','For dev/test: Use EC2 instance directly with Security Groups']},
+  {id:'nat-gateway',check:r=>r.type==='nat'&&r.status==='unused',severity:'critical',
+   title:r=>`Idle NAT Gateway: ${r.name}`,savings:r=>r.cost,
+   desc:r=>`"${r.name}" is a NAT Gateway with no traffic. NAT Gateways cost ~$32/month base + data charges. An unused NAT Gateway is pure waste.`,
+   fixes:['VPC Console → NAT Gateways → check traffic metrics','If no traffic: Delete the NAT Gateway','Also release the associated Elastic IP','Consider VPC Endpoints for S3/DynamoDB to avoid NAT charges entirely']},
+  {id:'old-snapshot',check:r=>r.type==='snapshot'&&r.status==='old',severity:'warning',
+   title:r=>`Old EBS Snapshot: ${r.name}`,savings:r=>r.cost*0.8,
+   desc:r=>`"${r.name}" is an old EBS snapshot that's likely no longer needed. Snapshots are incremental but costs compound over time, especially for large volumes.`,
+   fixes:['EC2 Console → Elastic Block Store → Snapshots → sort by date','Delete snapshots older than your retention policy','Use Data Lifecycle Manager (DLM) to automate snapshot retention','Set max snapshots per volume to prevent accumulation']},
+];
+
+function detectLeaks(list){
+  const leaks=[];
+  for(const r of list)
+    for(const rule of RULES)
+      if(rule.check(r))
+        leaks.push({id:rule.id+'-'+r.id,severity:rule.severity,title:rule.title(r),resource:r.name,savings:Math.round(rule.savings(r)),cost:r.cost,desc:rule.desc(r),fixes:rule.fixes});
+  return leaks.sort((a,b)=>{const s={critical:0,warning:1,info:2};return s[a.severity]-s[b.severity]||b.savings-a.savings;});
+}
+
+function parsePaste(text){
+  try{const j=JSON.parse(text);if(Array.isArray(j))return j.map((r,i)=>({id:i+1,name:r.name||'Resource-'+i,type:detectType(r.type||''),cost:parseFloat(r.cost||0),status:detectStatus(r.status||'running'),region:r.region||'us-east-1',sku:r.instance_type||r.sku||''}));}catch(e){}
+  const lines=text.trim().split('\n').filter(l=>l.trim());const parsed=[];
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    if(line.toLowerCase().includes('name')&&line.toLowerCase().includes('type'))continue;
+    const parts=line.split(/[,\t|→]+/).map(p=>p.trim());
+    if(parts.length>=2){
+      const cost=parseFloat(parts.find(p=>/^\$?\d+\.?\d*$/.test(p.replace('$','').replace('/mo','')))||'0');
+      const statusRaw=parts.find(p=>/stop|unused|orphan|running|idle|low|old|unattach|oversiz/i.test(p))||'running';
+      if(parts[0]&&detectType(parts[1]))
+        parsed.push({id:i+100,name:parts[0],type:detectType(parts[1]),cost,status:detectStatus(statusRaw),region:'us-east-1',sku:parts.find(p=>/[a-z]+\d+\.[a-z0-9]+/i.test(p))||''});
+    }
+  }
+  return parsed;
+}
+
+function detectType(s){s=s.toLowerCase();
+  if(/ec2|instance|virtual.?machine/.test(s))return 'ec2';
+  if(/ebs|volume|disk/.test(s))return 'ebs';
+  if(/snapshot/.test(s))return 'snapshot';
+  if(/elastic.?ip|eip/.test(s))return 'eip';
+  if(/load.?bal|elb|alb|nlb/.test(s))return 'elb';
+  if(/rds|database|aurora/.test(s))return 'rds';
+  if(/s3|bucket/.test(s))return 's3';
+  if(/nat/.test(s))return 'nat';
+  if(/lambda/.test(s))return 'lambda';
+  return 'ec2';
+}
+
+function detectStatus(s){s=s.toLowerCase();
+  if(/stop|halt/.test(s))return 'stopped';
+  if(/unattach|orphan|unused/.test(s))return 'unused';
+  if(/low|idle|under/.test(s))return 'low';
+  if(/old|stale|expir/.test(s))return 'old';
+  if(/oversize/.test(s))return 'oversized';
+  return 'running';
+}
+
+function runScan(){
+  let list;
+  if(activeTab==='manual'){if(!resources.length){alert('Add at least one resource.');return;}list=resources;}
+  else if(activeTab==='paste'){const t=document.getElementById('pasteInput').value.trim();if(!t){alert('Paste data first.');return;}list=parsePaste(t);if(!list.length){alert('Could not parse. Try Manual Entry.');return;}}
+  else list=DEMO;
+
+  document.getElementById('inputSection').style.display='none';
+  document.getElementById('howSection').style.display='none';
+  document.getElementById('loadingSection').classList.add('show');
+
+  ['s1','s2','s3','s4','s5'].forEach((s,i)=>setTimeout(()=>document.getElementById(s).classList.add('on'),400+i*500));
+  setTimeout(()=>{document.getElementById('loadingSection').classList.remove('show');showResults(list);},3200);
+}
+
+function showResults(list){
+  const leaks=detectLeaks(list);
+  const total=list.reduce((s,r)=>s+r.cost,0);
+  const savings=leaks.reduce((s,l)=>s+l.savings,0);
+  const critS=leaks.filter(l=>l.severity==='critical').reduce((s,l)=>s+l.savings,0);
+  const warnS=leaks.filter(l=>l.severity==='warning').reduce((s,l)=>s+l.savings,0);
+  const pct=total>0?Math.round((savings/total)*100):0;
+
+  document.getElementById('resTitle').textContent=leaks.length?`🚨 ${leaks.length} AWS Leak${leaks.length>1?'s':''} Found — $${savings.toLocaleString()}/mo wasted`:'✅ No major leaks found!';
+  document.getElementById('resSub').textContent=`Analysed ${list.length} resources. ${pct}% of your spend ($${total.toLocaleString()}/mo total) is being wasted.`;
+
+  document.getElementById('savingsCards').innerHTML=`
+    <div class="sc crit"><div class="sc-val">$${critS.toLocaleString()}</div><div class="sc-lbl">Critical/mo</div></div>
+    <div class="sc warn"><div class="sc-val">$${warnS.toLocaleString()}</div><div class="sc-lbl">Optimisable/mo</div></div>
+    <div class="sc info"><div class="sc-val">${pct}%</div><div class="sc-lbl">Waste Rate</div></div>
+    <div class="sc total"><div class="sc-val">$${(savings*12).toLocaleString()}</div><div class="sc-lbl">Annual Savings</div></div>`;
+
+  document.getElementById('priorityActions').innerHTML=leaks.slice(0,3).map((l,i)=>`
+    <div class="action-item"><div class="action-num">${i+1}</div>
+    <div class="action-txt">${l.title} — <span class="action-save">saves $${l.savings}/mo</span>. ${l.fixes[0]}</div></div>`).join('')||
+    '<div style="color:var(--ok);font-size:14px">✅ No critical actions needed.</div>';
+
+  document.getElementById('leaksContainer').innerHTML=leaks.length?leaks.map(l=>`
+    <div class="lcard ${l.severity}">
+      <div class="lcard-head" onclick="toggleLeak('${l.id}')">
+        <div class="sdot"></div>
+        <div class="lcard-info">
+          <div class="lcard-title">${l.title}</div>
+          <div class="lcard-res">${l.resource} · $${l.cost}/mo current</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+          <div class="lcard-savings">-$${l.savings}/mo</div>
+          <div class="sbadge">${l.severity}</div>
+        </div>
+      </div>
+      <div class="lcard-body" id="leak-${l.id}">
+        <p class="lcard-desc">${l.desc}</p>
+        <div class="fix-box">
+          <div class="fix-ttl">📋 How to Fix</div>
+          ${l.fixes.map((f,i)=>`<div class="fix-step"><span class="fix-n">0${i+1}.</span><span>${f}</span></div>`).join('')}
+        </div>
+      </div>
+    </div>`).join(''):'<div style="text-align:center;padding:48px;background:var(--surface);border:1px solid var(--border);border-radius:16px;color:var(--ok)"><div style="font-size:48px;margin-bottom:12px">✅</div><div style="font-size:18px;font-weight:800">No waste patterns detected</div></div>';
+
+  window._leaks=leaks; window._list=list; window._savings=savings;
+  document.getElementById('ctaSaveVal').textContent='$'+savings.toLocaleString()+'/mo';
+  document.getElementById('ctaSaveAnn').textContent='$'+(savings*12).toLocaleString()+'/year';
+  const subj=encodeURIComponent('AWS Cost Audit — $'+savings+'/mo in savings found');
+  const body=encodeURIComponent('Hi Sinduja,\n\nI used AWSLeak and found $'+savings+'/month ($'+(savings*12)+'/year) in AWS waste across '+leaks.length+' issues.\n\nCan you help fix these?\n\nThanks!');
+  document.getElementById('ctaEmailBtn').href='mailto:sindujakalla@gmail.com?subject='+subj+'&body='+body;
+
+  document.getElementById('results').style.display='block';
+  document.getElementById('results').scrollIntoView({behavior:'smooth'});
+}
+
+function toggleLeak(id){document.getElementById('leak-'+id).classList.toggle('open');}
+
+function resetTool(){
+  document.getElementById('inputSection').style.display='block';
+  document.getElementById('howSection').style.display='block';
+  document.getElementById('results').style.display='none';
+  resources=[];renderList();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function copyReport(){
+  if(!window._leaks)return;
+  const lines=['AWSLeak Cost Analysis Report','='+'='.repeat(29),'Date: '+new Date().toLocaleDateString(),'Total Savings: $'+window._savings+'/month','','LEAKS:',...window._leaks.map((l,i)=>`${i+1}. [${l.severity.toUpperCase()}] ${l.title} — Save $${l.savings}/mo\n   Fix: ${l.fixes[0]}`),'','Generated by AWSLeak — © 2026 Sinduja Kalla'];
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>alert('Copied!'));
+}
+
+function exportReport(){
+  if(!window._leaks)return;
+  const html=`<html><head><style>body{font-family:Arial;padding:40px;color:#333}h1{color:#FF9900}.leak{margin:15px 0;padding:15px;border-left:4px solid;background:#f9f9f9}.critical{border-color:#FF4444}.warning{border-color:#FFD700}.fix{background:#f0f0f0;padding:10px;margin-top:8px;font-size:13px}.total{background:#fff8e8;padding:20px;border-radius:8px;margin:20px 0}</style></head><body>
+  <h1>🔍 AWSLeak Cost Report</h1><p>Generated: ${new Date().toLocaleString()}</p>
+  <div class="total"><strong>Resources Analysed:</strong> ${window._list.length}<br><strong>Monthly Savings Available:</strong> $${window._savings}/month<br><strong>Annual Savings:</strong> $${window._savings*12}/year</div>
+  <h2>Leaks Found</h2>${window._leaks.map(l=>`<div class="leak ${l.severity}"><strong>${l.title}</strong><br>Severity: ${l.severity.toUpperCase()} | Savings: $${l.savings}/mo<p>${l.desc}</p><div class="fix"><strong>Fix:</strong><br>${l.fixes.map((f,i)=>`${i+1}. ${f}`).join('<br>')}</div></div>`).join('')}
+  <hr><p style="color:#999;font-size:12px">AWSLeak™ — © 2026 Sinduja Kalla. All Rights Reserved.</p></body></html>`;
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));a.download='aws-leak-report.html';a.click();
+}
+</script>
+</body>
+</html>
