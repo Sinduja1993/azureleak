@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GCPLeak — Find Your Wasted Google Cloud Money</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto+Mono:wght@400;500;700&family=Nunito:wght@400;600;700;800;900&display=swap');
+
+:root {
+  --bg: #F8F9FC;
+  --surface: #FFFFFF;
+  --surface2: #F1F3F9;
+  --border: #E0E4EF;
+  --gblue: #1A73E8;
+  --gred: #EA4335;
+  --gyellow: #FBBC04;
+  --ggreen: #34A853;
+  --gblue-dark: #1557B0;
+  --danger: #EA4335;
+  --warn: #FF8F00;
+  --ok: #1E8E3E;
+  --text: #202124;
+  --muted: #5F6368;
+  --light: #E8F0FE;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Nunito', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Google-style top stripe */
+.google-stripe {
+  height: 4px;
+  background: linear-gradient(90deg, var(--gblue) 25%, var(--gred) 25% 50%, var(--gyellow) 50% 75%, var(--ggreen) 75%);
+}
+
+/* Subtle grid pattern */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(26,115,232,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(26,115,232,0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.container { max-width: 980px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+.ownership-bar {
+  background: rgba(26,115,232,0.06);
+  border-bottom: 1px solid rgba(26,115,232,0.15);
+  padding: 7px 0; text-align: center;
+  font-size: 11px; font-family: 'Roboto Mono', monospace; color: var(--muted);
+}
+.ownership-bar strong { color: var(--gblue); }
+
+header {
+  padding: 28px 0 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.logo { display: flex; align-items: center; gap: 12px; }
+
+.logo-icon {
+  width: 40px; height: 40px;
+  background: white;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
+}
+
+.logo-text { font-size: 24px; font-weight: 900; letter-spacing: -0.3px; color: var(--text); }
+.logo-text .g { color: var(--gblue); }
+.logo-text .c { color: var(--gred); }
+.logo-text .p { color: var(--gyellow); }
+.logo-text .leak { color: var(--ggreen); }
+
+.gcp-badge {
+  background: var(--light); border: 1px solid rgba(26,115,232,0.3);
+  color: var(--gblue); padding: 5px 14px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; font-family: 'Roboto Mono', monospace;
+  letter-spacing: 0.5px;
+}
+
+/* HERO */
+.hero { padding: 48px 0 36px; text-align: center; }
+
+.hero-tag {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #FCE8E6; border: 1px solid rgba(234,67,53,0.3);
+  color: var(--gred); padding: 6px 18px; border-radius: 20px;
+  font-size: 12px; font-weight: 700; font-family: 'Roboto Mono', monospace;
+  letter-spacing: 0.5px; margin-bottom: 24px;
+}
+
+.hero h1 {
+  font-size: clamp(36px, 5.5vw, 64px);
+  font-weight: 900; line-height: 1.1;
+  letter-spacing: -1.5px; margin-bottom: 16px; color: var(--text);
+}
+
+.hero h1 .gcp-multi {
+  background: linear-gradient(135deg, var(--gblue) 0%, var(--gred) 33%, var(--gyellow) 66%, var(--ggreen) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+
+.hero p { color: var(--muted); font-size: 17px; max-width: 500px; margin: 0 auto 28px; line-height: 1.7; font-weight: 400; }
+
+.stats-row { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; }
+
+.stat-box {
+  background: white; border: 1px solid var(--border); border-radius: 12px; padding: 16px 24px; text-align: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.stat-val { font-size: 26px; font-weight: 900; color: var(--gblue); font-family: 'Roboto Mono', monospace; }
+.stat-lbl { font-size: 11px; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* TOOL */
+.tool-wrap {
+  background: white; border: 1px solid var(--border); border-radius: 16px;
+  overflow: hidden; margin-bottom: 28px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08), 0 8px 32px rgba(0,0,0,0.04);
+}
+
+.tool-tabs { display: flex; background: var(--surface2); border-bottom: 1px solid var(--border); }
+.ttab {
+  flex: 1; padding: 14px; background: transparent; border: none;
+  color: var(--muted); font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px;
+  border-bottom: 3px solid transparent; margin-bottom: -1px;
+}
+.ttab.active { color: var(--gblue); border-bottom-color: var(--gblue); background: white; }
+
+.tab-body { display: none; padding: 24px; }
+.tab-body.active { display: block; }
+
+.lbl { font-size: 11px; font-family: 'Roboto Mono', monospace; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+
+textarea {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text); font-family: 'Roboto Mono', monospace; font-size: 12px;
+  padding: 16px; resize: vertical; min-height: 200px; outline: none; transition: border-color 0.2s; line-height: 1.6;
+}
+textarea:focus { border-color: var(--gblue); box-shadow: 0 0 0 3px rgba(26,115,232,0.1); }
+textarea::placeholder { color: #BDC1C6; }
+
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.fg { display: flex; flex-direction: column; gap: 6px; }
+.fg label { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.fg input, .fg select {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'Nunito', sans-serif; font-size: 14px;
+  padding: 10px 14px; outline: none; transition: all 0.2s;
+}
+.fg input:focus, .fg select:focus { border-color: var(--gblue); box-shadow: 0 0 0 3px rgba(26,115,232,0.1); background: white; }
+
+.add-btn {
+  width: 100%; padding: 11px; background: var(--light); border: 2px dashed rgba(26,115,232,0.4);
+  color: var(--gblue); font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 700;
+  cursor: pointer; border-radius: 8px; transition: all 0.2s;
+}
+.add-btn:hover { background: rgba(26,115,232,0.1); }
+
+.resources-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.res-item {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
+  animation: slideIn 0.2s ease;
+}
+@keyframes slideIn { from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)} }
+.res-info { display: flex; flex-direction: column; gap: 2px; }
+.res-name { font-size: 14px; font-weight: 700; }
+.res-meta { font-size: 11px; font-family: 'Roboto Mono', monospace; color: var(--muted); }
+.res-cost { font-family: 'Roboto Mono', monospace; font-size: 14px; font-weight: 700; color: var(--warn); }
+.res-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px 8px; margin-left: 8px; transition: color 0.2s; }
+.res-del:hover { color: var(--danger); }
+
+.scan-btn {
+  display: block; width: 100%; padding: 16px; margin-top: 20px;
+  background: var(--gblue); border: none; border-radius: 10px; color: white;
+  font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 800;
+  letter-spacing: 0.3px; cursor: pointer; transition: all 0.2s;
+  box-shadow: 0 2px 6px rgba(26,115,232,0.3);
+}
+.scan-btn:hover { background: var(--gblue-dark); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(26,115,232,0.35); }
+
+/* LOADING */
+.loading { display: none; text-align: center; padding: 56px 28px; }
+.loading.show { display: block; }
+
+/* Google-style spinner */
+.gspinner {
+  width: 56px; height: 56px; margin: 0 auto 20px;
+  position: relative; animation: gRotate 1.4s linear infinite;
+}
+@keyframes gRotate { 100%{transform:rotate(360deg)} }
+.gspinner-circle {
+  width: 100%; height: 100%;
+  border: 4px solid transparent;
+  border-top-color: var(--gblue);
+  border-right-color: var(--gred);
+  border-bottom-color: var(--gyellow);
+  border-left-color: var(--ggreen);
+  border-radius: 50%;
+}
+.load-text { font-size: 15px; font-weight: 700; color: var(--text); }
+.load-steps { margin-top: 14px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.load-step { font-size: 12px; color: var(--muted); opacity: 0; transition: opacity 0.3s; font-family: 'Roboto Mono', monospace; }
+.load-step.on { opacity: 1; color: var(--ok); }
+
+/* RESULTS */
+#results { display: none; }
+
+.results-summary {
+  background: white; border: 1px solid var(--border); border-radius: 16px; padding: 28px; margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border-top: 4px solid var(--gblue);
+}
+.rs-title { font-size: 20px; font-weight: 900; margin-bottom: 6px; }
+.rs-sub { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+.savings-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.sc { border-radius: 12px; padding: 16px; text-align: center; border: 1px solid; }
+.sc.crit { background: #FCE8E6; border-color: rgba(234,67,53,0.3); }
+.sc.warn { background: #FEF3CD; border-color: rgba(255,143,0,0.3); }
+.sc.info { background: var(--light); border-color: rgba(26,115,232,0.3); }
+.sc.total { background: #E6F4EA; border-color: rgba(52,168,83,0.3); }
+.sc-val { font-family: 'Roboto Mono', monospace; font-size: 22px; font-weight: 700; }
+.sc.crit .sc-val { color: var(--gred); }
+.sc.warn .sc-val { color: var(--warn); }
+.sc.info .sc-val { color: var(--gblue); }
+.sc.total .sc-val { color: var(--ok); }
+.sc-lbl { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+.priority-box {
+  background: #FCE8E6; border: 1px solid rgba(234,67,53,0.25);
+  border-radius: 16px; padding: 24px; margin-bottom: 20px;
+}
+.priority-title { font-size: 15px; font-weight: 800; color: var(--gred); margin-bottom: 16px; }
+.action-list { display: flex; flex-direction: column; gap: 10px; }
+.action-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.action-num { background: var(--gred); color: white; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.action-txt { font-size: 13px; color: var(--text); line-height: 1.5; }
+.action-save { font-weight: 700; color: var(--ok); }
+
+.leaks { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+.lcard { background: white; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; animation: slideIn 0.3s ease; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+.lcard-head { display: flex; align-items: center; padding: 16px 20px; gap: 14px; cursor: pointer; transition: background 0.2s; }
+.lcard-head:hover { background: var(--surface2); }
+
+.sdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.lcard.critical .sdot { background: var(--gred); box-shadow: 0 0 6px rgba(234,67,53,0.5); }
+.lcard.warning .sdot { background: var(--warn); box-shadow: 0 0 6px rgba(255,143,0,0.5); }
+.lcard.info .sdot { background: var(--gblue); }
+
+.lcard-info { flex: 1; }
+.lcard-title { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+.lcard-res { font-size: 12px; font-family: 'Roboto Mono', monospace; color: var(--muted); }
+.lcard-savings { font-family: 'Roboto Mono', monospace; font-size: 16px; font-weight: 700; }
+.lcard.critical .lcard-savings { color: var(--gred); }
+.lcard.warning .lcard-savings { color: var(--warn); }
+.lcard.info .lcard-savings { color: var(--gblue); }
+
+.sbadge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.lcard.critical .sbadge { background: #FCE8E6; color: var(--gred); }
+.lcard.warning .sbadge { background: #FEF3CD; color: var(--warn); }
+.lcard.info .sbadge { background: var(--light); color: var(--gblue); }
+
+.lcard-body { padding: 0 20px 16px 44px; display: none; }
+.lcard-body.open { display: block; }
+.lcard-desc { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 12px; }
+.fix-box { background: var(--surface2); border-radius: 10px; padding: 14px; border: 1px solid var(--border); }
+.fix-ttl { font-size: 11px; font-family: 'Roboto Mono', monospace; color: var(--ok); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; font-weight: 700; }
+.fix-step { display: flex; gap: 10px; font-size: 13px; color: var(--muted); margin-bottom: 6px; line-height: 1.5; }
+.fix-n { color: var(--gblue); font-family: 'Roboto Mono', monospace; font-size: 11px; flex-shrink: 0; margin-top: 2px; font-weight: 700; }
+
+/* CTA */
+.cta-strip {
+  background: white; border: 1px solid rgba(26,115,232,0.3); border-radius: 20px; padding: 32px;
+  margin-bottom: 24px; box-shadow: 0 4px 20px rgba(26,115,232,0.1);
+  border-top: 4px solid var(--gblue); position: relative;
+}
+.cta-inner { display: flex; gap: 28px; align-items: center; }
+.cta-left { flex: 1; }
+.cta-eyebrow { font-size: 11px; font-family: 'Roboto Mono', monospace; color: var(--gblue); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; font-weight: 700; }
+.cta-title { font-size: 24px; font-weight: 900; letter-spacing: -0.3px; margin-bottom: 8px; }
+.cta-sub { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 14px; max-width: 400px; }
+.cta-bullets { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.cta-bullet { font-size: 12px; color: var(--text); font-weight: 700; }
+.cta-right { display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 200px; flex-shrink: 0; }
+.cta-save-box { background: #E6F4EA; border: 1px solid rgba(52,168,83,0.3); border-radius: 10px; padding: 14px 20px; text-align: center; width: 100%; }
+.cta-save-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; font-family: 'Roboto Mono', monospace; }
+.cta-save-val { font-size: 28px; font-weight: 700; color: var(--ok); font-family: 'Roboto Mono', monospace; }
+.cta-save-ann { font-size: 12px; color: var(--muted); margin-top: 2px; font-family: 'Roboto Mono', monospace; }
+.cta-email-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 14px 20px;
+  background: var(--gblue); border: none; border-radius: 10px; color: white;
+  font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 800;
+  cursor: pointer; text-decoration: none; text-align: center; transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(26,115,232,0.3);
+  animation: pulse-gcp 2.5s ease-in-out infinite;
+}
+@keyframes pulse-gcp { 0%,100%{box-shadow:0 2px 8px rgba(26,115,232,0.3)} 50%{box-shadow:0 4px 20px rgba(26,115,232,0.55)} }
+.cta-email-btn:hover { background: var(--gblue-dark); transform: translateY(-2px); animation: none; }
+.cta-email-lbl { font-size: 11px; font-family: 'Roboto Mono', monospace; color: var(--muted); }
+
+.tips-section { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 28px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+.tips-title { font-size: 15px; font-weight: 800; margin-bottom: 16px; color: var(--gblue); }
+.tips-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.tip { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.tip-icon { font-size: 18px; margin-bottom: 6px; }
+.tip-text { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.tip-text strong { color: var(--text); }
+
+.reset-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+  padding: 9px 18px; border-radius: 20px; font-family: 'Nunito', sans-serif;
+  font-size: 13px; cursor: pointer; transition: all 0.2s; margin-bottom: 24px;
+}
+.reset-btn:hover { border-color: var(--gblue); color: var(--gblue); }
+
+.export-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.exp-btn {
+  flex: 1; min-width: 130px; padding: 12px 18px; border-radius: 10px;
+  font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; text-align: center; border: 1px solid;
+}
+.exp-btn.primary { background: var(--gblue); border-color: var(--gblue); color: white; }
+.exp-btn.secondary { background: transparent; border-color: var(--border); color: var(--text); }
+.exp-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+
+footer { border-top: 1px solid var(--border); padding: 20px 0; text-align: center; font-size: 11px; font-family: 'Roboto Mono', monospace; color: var(--muted); }
+footer strong { color: var(--gblue); }
+footer a { color: var(--gblue); text-decoration: none; }
+
+@media(max-width:600px){.form-grid{grid-template-columns:1fr}.cta-inner{flex-direction:column}.cta-right{width:100%}}
+</style>
+</head>
+<body>
+<div class="google-stripe"></div>
+
+<div class="ownership-bar">
+  GCPLeak™ &nbsp;|&nbsp; © 2026 <strong>Sinduja Kalla</strong> &nbsp;|&nbsp; All Rights Reserved &nbsp;|&nbsp; Original Tool — Unauthorised Use Prohibited
+</div>
+
+<div class="container">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">💸</div>
+      <div class="logo-text"><span class="g">G</span><span class="c">C</span><span class="p">P</span><span class="leak">Leak</span></div>
+    </div>
+    <div class="gcp-badge">Free GCP Cost Tool</div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-tag">⚠ GCP Cost Waste Detector</div>
+    <h1>Your Google Cloud Bill<br>Is <span class="gcp-multi">Leaking Money</span></h1>
+    <p>Find idle Compute Engine VMs, orphaned Persistent Disks, forgotten Cloud SQL instances, unused Static IPs and more — in 60 seconds.</p>
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-val">~30%</div><div class="stat-lbl">Avg GCP Waste</div></div>
+      <div class="stat-box"><div class="stat-val">$16K</div><div class="stat-lbl">Avg Annual Leak</div></div>
+      <div class="stat-box"><div class="stat-val">10</div><div class="stat-lbl">Leak Patterns</div></div>
+    </div>
+  </div>
+
+  <div class="tool-wrap" id="inputSection">
+    <div class="tool-tabs">
+      <button class="ttab active" onclick="switchTab('manual')">🔧 Manual Entry</button>
+      <button class="ttab" onclick="switchTab('paste')">📋 Paste CSV/JSON</button>
+      <button class="ttab" onclick="switchTab('demo')">🚀 Demo</button>
+    </div>
+
+    <div id="tab-manual" class="tab-body active">
+      <p class="lbl">Add your GCP resources</p>
+      <div class="form-grid">
+        <div class="fg"><label>Resource Name</label><input type="text" id="resName" placeholder="e.g. prod-api-vm-01" /></div>
+        <div class="fg"><label>Resource Type</label>
+          <select id="resType">
+            <option value="">Select...</option>
+            <option value="gce">Compute Engine VM</option>
+            <option value="disk">Persistent Disk</option>
+            <option value="staticip">Static External IP</option>
+            <option value="cloudsql">Cloud SQL Instance</option>
+            <option value="gke">GKE Cluster</option>
+            <option value="snapshot">Disk Snapshot</option>
+            <option value="lb">Cloud Load Balancer</option>
+            <option value="storage">Cloud Storage Bucket</option>
+            <option value="nat">Cloud NAT</option>
+            <option value="cloudrun">Cloud Run Service</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="fg"><label>Monthly Cost (USD)</label><input type="number" id="resCost" placeholder="e.g. 200" /></div>
+        <div class="fg"><label>Status</label>
+          <select id="resStatus">
+            <option value="running">Running / Active</option>
+            <option value="stopped">Stopped / Terminated</option>
+            <option value="unused">Unused / Orphaned</option>
+            <option value="low">Low Utilisation (&lt;10%)</option>
+            <option value="oversized">Oversized</option>
+            <option value="old">Old / Stale</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="fg"><label>Region</label>
+          <select id="resRegion">
+            <option value="us-central1">us-central1 (Iowa)</option>
+            <option value="us-east1">us-east1 (S. Carolina)</option>
+            <option value="europe-west1">europe-west1 (Belgium)</option>
+            <option value="europe-west2">europe-west2 (London)</option>
+            <option value="asia-southeast1">asia-southeast1 (Singapore)</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="fg"><label>Machine Type (optional)</label><input type="text" id="resSku" placeholder="e.g. n2-standard-4" /></div>
+      </div>
+      <button class="add-btn" onclick="addResource()">+ Add Resource</button>
+      <div class="resources-list" id="resourcesList"></div>
+    </div>
+
+    <div id="tab-paste" class="tab-body">
+      <p class="lbl">Paste GCP resource data</p>
+      <textarea id="pasteInput" placeholder='Examples:
+
+CSV:
+Name,Type,Cost,Status
+prod-api-vm,GCE,290,running-low
+orphan-disk-01,PersistentDisk,38,unattached
+old-sql-dev,CloudSQL,420,oversized
+
+JSON:
+[{"name":"gke-dev","type":"gke","cost":680,"status":"oversized"}]'></textarea>
+    </div>
+
+    <div id="tab-demo" class="tab-body">
+      <p class="lbl">Demo: Typical GCP waste scenario</p>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;font-family:'Roboto Mono',monospace;font-size:12px;color:var(--muted);line-height:1.9">
+        <span style="color:var(--ok)">// Acme Corp GCP Project (demo)</span><br>
+        prod-api-vm-01 → n2-standard-8 → $290/mo → CPU avg 5%<br>
+        dev-vm-02 → n1-standard-4 → $130/mo → STOPPED 2 weeks<br>
+        orphan-disk-001 → pd-ssd 500GB → $85/mo → UNATTACHED<br>
+        orphan-disk-002 → pd-standard 1TB → $40/mo → UNATTACHED<br>
+        old-snapshot-mar24 → Snapshot → $18/mo → 16 months old<br>
+        idle-staticip-03 → Static IP → $7/mo → NOT IN USE<br>
+        sql-dev-db → db-n1-standard-8 → $490/mo → dev only, oversized<br>
+        gke-dev-cluster → 3 nodes n1-standard-4 → $390/mo → 10% utilisation<br>
+        Total: <span style="color:var(--warn)">$1,450/mo</span>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-top:10px">Click Scan to see waste breakdown.</p>
+    </div>
+
+    <div style="padding:0 24px 24px">
+      <button class="scan-btn" onclick="runScan()">🔍 Scan for GCP Leaks</button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loadingSection">
+    <div class="gspinner"><div class="gspinner-circle"></div></div>
+    <div class="load-text">Scanning GCP environment...</div>
+    <div class="load-steps">
+      <div class="load-step" id="s1">✓ Detecting stopped Compute Engine VMs</div>
+      <div class="load-step" id="s2">✓ Scanning orphaned Persistent Disks</div>
+      <div class="load-step" id="s3">✓ Checking unused Static IPs</div>
+      <div class="load-step" id="s4">✓ Analysing oversized Cloud SQL instances</div>
+      <div class="load-step" id="s5">✓ Calculating total savings potential</div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <button class="reset-btn" onclick="resetTool()">← New Scan</button>
+    <div class="results-summary">
+      <div class="rs-title" id="resTitle">Analysis Complete</div>
+      <div class="rs-sub" id="resSub"></div>
+      <div class="savings-cards" id="savingsCards"></div>
+    </div>
+    <div class="priority-box">
+      <div class="priority-title">🔥 Top Priority Actions</div>
+      <div class="action-list" id="priorityActions"></div>
+    </div>
+    <div class="leaks" id="leaksContainer"></div>
+
+    <div class="cta-strip">
+      <div class="cta-inner">
+        <div class="cta-left">
+          <div class="cta-eyebrow">💼 Multi-Cloud Certified Engineer — Available Now</div>
+          <div class="cta-title">Want me to fix this for you?</div>
+          <div class="cta-sub">I'll personally audit your GCP environment, implement all fixes, and set up billing alerts so you stay in control.</div>
+          <div class="cta-bullets">
+            <div class="cta-bullet">✅ Azure + GCP Expertise</div>
+            <div class="cta-bullet">✅ Fixed in 24–48 hours</div>
+            <div class="cta-bullet">✅ Full audit report</div>
+            <div class="cta-bullet">✅ No fix = No charge</div>
+          </div>
+        </div>
+        <div class="cta-right">
+          <div class="cta-save-box">
+            <div class="cta-save-lbl">Your potential savings</div>
+            <div class="cta-save-val" id="ctaSaveVal">$0/mo</div>
+            <div class="cta-save-ann" id="ctaSaveAnn">$0/year</div>
+          </div>
+          <a class="cta-email-btn" href="" id="ctaEmailBtn" target="_blank">✉ Email Me to Fix This</a>
+          <div class="cta-email-lbl">sindujakalla@gmail.com</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tips-section">
+      <div class="tips-title">💡 GCP Cost Hygiene Tips</div>
+      <div class="tips-grid">
+        <div class="tip"><div class="tip-icon">⏰</div><div class="tip-text"><strong>VM scheduling</strong> — Use Cloud Scheduler + Cloud Functions to auto-stop dev VMs at night. Saves 60%.</div></div>
+        <div class="tip"><div class="tip-icon">💰</div><div class="tip-text"><strong>Committed Use Discounts</strong> — 1-year CUDs save 37%, 3-year save 55% on Compute Engine.</div></div>
+        <div class="tip"><div class="tip-icon">📊</div><div class="tip-text"><strong>GCP Budget Alerts</strong> — Set at 50%, 75%, 90% and 100% in Billing → Budgets & Alerts.</div></div>
+        <div class="tip"><div class="tip-icon">🔄</div><div class="tip-text"><strong>Recommender API</strong> — GCP's built-in right-sizing recommender suggests VM downgrades automatically.</div></div>
+        <div class="tip"><div class="tip-icon">🗑️</div><div class="tip-text"><strong>Object lifecycle</strong> — Auto-archive old GCS objects to Nearline/Coldline. Saves 60-80% on storage.</div></div>
+        <div class="tip"><div class="tip-icon">🏷️</div><div class="tip-text"><strong>Label everything</strong> — Enforce team/project/env labels via GCP Organisation Policies.</div></div>
+      </div>
+    </div>
+
+    <div class="export-row">
+      <button class="exp-btn primary" onclick="exportReport()">📄 Export Report</button>
+      <button class="exp-btn secondary" onclick="copyReport()">📋 Copy as Text</button>
+      <button class="exp-btn secondary" onclick="resetTool()">🔄 New Scan</button>
+    </div>
+  </div>
+
+  <div class="tips-section" id="howSection" style="margin-top:28px">
+    <div class="tips-title">How GCPLeak Works</div>
+    <div class="tips-grid">
+      <div class="tip"><div class="tip-icon">1️⃣</div><div class="tip-text"><strong>Add resources</strong> manually or paste from GCP Billing export or Cloud Asset Inventory.</div></div>
+      <div class="tip"><div class="tip-icon">2️⃣</div><div class="tip-text"><strong>Instant scan</strong> against 10 GCP cost leak patterns — idle, orphaned, oversized and more.</div></div>
+      <div class="tip"><div class="tip-icon">3️⃣</div><div class="tip-text"><strong>Get savings</strong> with step-by-step GCP Console fix instructions. Export PDF report.</div></div>
+    </div>
+  </div>
+
+  <footer>
+    GCPLeak™ — © 2026 <strong>Sinduja Kalla</strong>. All Rights Reserved. &nbsp;|&nbsp; Original tool. Unauthorised copying prohibited. &nbsp;|&nbsp; <a href="mailto:sindujakalla@gmail.com">sindujakalla@gmail.com</a>
+  </footer>
+</div>
+
+<script>
+let resources=[];let activeTab='manual';
+
+function switchTab(t){activeTab=t;document.querySelectorAll('.ttab').forEach((b,i)=>b.classList.toggle('active',['manual','paste','demo'][i]===t));document.querySelectorAll('.tab-body').forEach(c=>c.classList.remove('active'));document.getElementById('tab-'+t).classList.add('active');}
+
+function addResource(){
+  const name=document.getElementById('resName').value.trim();const type=document.getElementById('resType').value;const cost=parseFloat(document.getElementById('resCost').value);const status=document.getElementById('resStatus').value;const region=document.getElementById('resRegion').value;const sku=document.getElementById('resSku').value.trim();
+  if(!name||!type||isNaN(cost)){alert('Fill in Name, Type and Cost.');return;}
+  resources.push({id:Date.now(),name,type,cost,status,region,sku});renderList();
+  document.getElementById('resName').value='';document.getElementById('resCost').value='';document.getElementById('resSku').value='';document.getElementById('resType').value='';
+}
+function removeResource(id){resources=resources.filter(r=>r.id!==id);renderList();}
+function renderList(){const el=document.getElementById('resourcesList');el.innerHTML=resources.map(r=>`<div class="res-item"><div class="res-info"><div class="res-name">${r.name}</div><div class="res-meta">${r.type.toUpperCase()} · ${r.region} · ${r.sku||'—'} · ${r.status}</div></div><div style="display:flex;align-items:center;gap:4px"><div class="res-cost">$${r.cost}/mo</div><button class="res-del" onclick="removeResource(${r.id})">✕</button></div></div>`).join('');}
+
+const DEMO=[
+  {id:1,name:'prod-api-vm-01',type:'gce',cost:290,status:'low',region:'us-central1',sku:'n2-standard-8'},
+  {id:2,name:'dev-vm-02',type:'gce',cost:130,status:'stopped',region:'us-central1',sku:'n1-standard-4'},
+  {id:3,name:'orphan-disk-001',type:'disk',cost:85,status:'unused',region:'us-central1',sku:'pd-ssd 500GB'},
+  {id:4,name:'orphan-disk-002',type:'disk',cost:40,status:'unused',region:'us-central1',sku:'pd-standard 1TB'},
+  {id:5,name:'old-snapshot-mar24',type:'snapshot',cost:18,status:'old',region:'us-central1',sku:''},
+  {id:6,name:'idle-staticip-03',type:'staticip',cost:7,status:'unused',region:'us-central1',sku:''},
+  {id:7,name:'sql-dev-db',type:'cloudsql',cost:490,status:'oversized',region:'us-central1',sku:'db-n1-standard-8'},
+  {id:8,name:'gke-dev-cluster',type:'gke',cost:390,status:'low',region:'us-central1',sku:'3x n1-standard-4'},
+];
+
+const RULES=[
+  {id:'stopped-gce',check:r=>r.type==='gce'&&r.status==='stopped',severity:'critical',title:r=>`Stopped VM still billing: ${r.name}`,savings:r=>r.cost*0.88,
+   desc:r=>`"${r.name}" is a stopped Compute Engine VM. GCP still charges for attached persistent disks, static IPs, and reserved GPUs/TPUs even when stopped.`,
+   fixes:['Console → Compute Engine → VM Instances → find stopped VM','If unneeded: Delete VM (check "Delete boot disk")','Release any attached Static External IP addresses','If needed: Create machine image first, then delete VM']},
+  {id:'orphan-disk',check:r=>r.type==='disk'&&(r.status==='unused'||r.status==='stopped'),severity:'critical',title:r=>`Orphaned Persistent Disk: ${r.name}`,savings:r=>r.cost,
+   desc:r=>`"${r.name}" is a Persistent Disk not attached to any VM. GCP charges full price for unattached disks. pd-ssd especially is expensive at ~$0.17/GB/month.`,
+   fixes:['Console → Compute Engine → Disks → filter "Not attached"','Create snapshot if data needed: gcloud compute disks snapshot <name>','Delete: gcloud compute disks delete <name> --zone=<zone>','Enable Cloud Asset Inventory to track orphaned resources automatically']},
+  {id:'unused-staticip',check:r=>r.type==='staticip'&&r.status==='unused',severity:'warning',title:r=>`Unused Static IP: ${r.name}`,savings:r=>r.cost,
+   desc:r=>`"${r.name}" is a Static External IP address not assigned to any resource. GCP charges ~$7/month per idle static IP — small but they multiply across projects.`,
+   fixes:['Console → VPC Network → External IP Addresses','Filter for "In use: No"','Release: gcloud compute addresses delete <name> --region=<region>','Use ephemeral IPs for non-production environments']},
+  {id:'oversized-gce',check:r=>r.type==='gce'&&(r.status==='low'||r.status==='oversized'),severity:'warning',title:r=>`Oversized Compute VM: ${r.name}`,savings:r=>r.cost*0.5,
+   desc:r=>`"${r.name}" shows very low utilisation. GCP Recommender actively flags this. Moving n2-standard-8 to n2-standard-2 saves ~75% for the same low workload.`,
+   fixes:['Check GCP Recommender: Console → Compute Engine → VM Instances → Recommendations column','Review Cloud Monitoring CPU/memory for 14+ days','Stop VM → Edit → change machine type → start','Consider e2 machine series for dev (cheapest general purpose)']},
+  {id:'oversized-sql',check:r=>r.type==='cloudsql'&&(r.status==='oversized'||r.status==='low'),severity:'critical',title:r=>`Oversized Cloud SQL: ${r.name}`,savings:r=>r.cost*0.6,
+   desc:r=>`"${r.name}" is likely massively over-provisioned. db-n1-standard-8 for a dev database costs $490/month. A db-f1-micro costs $7/month and handles most dev workloads easily.`,
+   fixes:['Console → SQL → select instance → Edit','Scale down machine type (db-n1-standard-8 → db-g1-small for dev)','For dev: stop instance when not in use (Console → Stop)','Consider Cloud SQL sandbox tier for dev/test environments']},
+  {id:'oversized-gke',check:r=>r.type==='gke'&&(r.status==='low'||r.status==='oversized'),severity:'critical',title:r=>`Oversized GKE Cluster: ${r.name}`,savings:r=>r.cost*0.55,
+   desc:r=>`"${r.name}" is running at very low utilisation. A 3-node n1-standard-4 cluster for development is significant overkill. Enable cluster autoscaler to scale to zero when idle.`,
+   fixes:['Enable Cluster Autoscaler: scale node pools to 0 minimum','For dev: use 1 node e2-medium instead of 3x n1-standard-4','Enable node auto-provisioning for right-sizing','Consider GKE Autopilot — you only pay for pod resources, not node capacity']},
+  {id:'old-snapshot',check:r=>r.type==='snapshot'&&r.status==='old',severity:'warning',title:r=>`Old Snapshot: ${r.name}`,savings:r=>r.cost*0.8,
+   desc:r=>`"${r.name}" is an old snapshot accumulating storage costs. GCP charges $0.026/GB/month for snapshots. Old migration or pre-update snapshots are almost never needed after 60 days.`,
+   fixes:['Console → Compute Engine → Snapshots → sort by creation date','Delete snapshots older than your retention policy','Create Snapshot Schedule with auto-delete: gcloud compute resource-policies create snapshot-schedule','Use Cloud Storage for long-term archival instead (10x cheaper)']},
+];
+
+function detectLeaks(list){const leaks=[];for(const r of list)for(const rule of RULES)if(rule.check(r))leaks.push({id:rule.id+'-'+r.id,severity:rule.severity,title:rule.title(r),resource:r.name,savings:Math.round(rule.savings(r)),cost:r.cost,desc:rule.desc(r),fixes:rule.fixes});return leaks.sort((a,b)=>{const s={critical:0,warning:1,info:2};return s[a.severity]-s[b.severity]||b.savings-a.savings});}
+
+function parsePaste(text){try{const j=JSON.parse(text);if(Array.isArray(j))return j.map((r,i)=>({id:i+1,name:r.name||'Resource-'+i,type:detectType(r.type||''),cost:parseFloat(r.cost||0),status:detectStatus(r.status||'running'),region:r.region||'us-central1',sku:r.sku||''}));}catch(e){}
+const lines=text.trim().split('\n').filter(l=>l.trim());const parsed=[];
+for(let i=0;i<lines.length;i++){const line=lines[i];if(line.toLowerCase().includes('name')&&line.toLowerCase().includes('type'))continue;const parts=line.split(/[,\t|→]+/).map(p=>p.trim());if(parts.length>=2){const cost=parseFloat(parts.find(p=>/^\$?\d+\.?\d*$/.test(p.replace('$','').replace('/mo','')))||'0');const statusRaw=parts.find(p=>/stop|unused|orphan|running|idle|low|old|unattach|oversiz/i.test(p))||'running';if(parts[0]&&detectType(parts[1]))parsed.push({id:i+100,name:parts[0],type:detectType(parts[1]),cost,status:detectStatus(statusRaw),region:'us-central1',sku:''});}}return parsed;}
+
+function detectType(s){s=s.toLowerCase();if(/gce|compute|vm|instance/.test(s))return 'gce';if(/disk|persistent/.test(s))return 'disk';if(/snapshot/.test(s))return 'snapshot';if(/static.?ip|address/.test(s))return 'staticip';if(/sql|database/.test(s))return 'cloudsql';if(/gke|kubernetes/.test(s))return 'gke';if(/load.?bal|lb/.test(s))return 'lb';if(/storage|bucket|gcs/.test(s))return 'storage';if(/nat/.test(s))return 'nat';if(/run/.test(s))return 'cloudrun';return 'gce';}
+function detectStatus(s){s=s.toLowerCase();if(/stop|halt|terminat/.test(s))return 'stopped';if(/unattach|orphan|unused/.test(s))return 'unused';if(/low|idle|under/.test(s))return 'low';if(/old|stale|expir/.test(s))return 'old';if(/oversize/.test(s))return 'oversized';return 'running';}
+
+function runScan(){
+  let list;
+  if(activeTab==='manual'){if(!resources.length){alert('Add at least one resource.');return;}list=resources;}
+  else if(activeTab==='paste'){const t=document.getElementById('pasteInput').value.trim();if(!t){alert('Paste data first.');return;}list=parsePaste(t);if(!list.length){alert('Could not parse. Try Manual Entry.');return;}}
+  else list=DEMO;
+  document.getElementById('inputSection').style.display='none';document.getElementById('howSection').style.display='none';document.getElementById('loadingSection').classList.add('show');
+  ['s1','s2','s3','s4','s5'].forEach((s,i)=>setTimeout(()=>document.getElementById(s).classList.add('on'),400+i*500));
+  setTimeout(()=>{document.getElementById('loadingSection').classList.remove('show');showResults(list);},3200);
+}
+
+function showResults(list){
+  const leaks=detectLeaks(list);const total=list.reduce((s,r)=>s+r.cost,0);const savings=leaks.reduce((s,l)=>s+l.savings,0);const critS=leaks.filter(l=>l.severity==='critical').reduce((s,l)=>s+l.savings,0);const warnS=leaks.filter(l=>l.severity==='warning').reduce((s,l)=>s+l.savings,0);const pct=total>0?Math.round((savings/total)*100):0;
+  document.getElementById('resTitle').textContent=leaks.length?`🚨 ${leaks.length} GCP Leak${leaks.length>1?'s':''} Found — $${savings.toLocaleString()}/mo wasted`:'✅ No major leaks found!';
+  document.getElementById('resSub').textContent=`Analysed ${list.length} resources. ${pct}% of your spend ($${total.toLocaleString()}/mo total) is wasted.`;
+  document.getElementById('savingsCards').innerHTML=`<div class="sc crit"><div class="sc-val">$${critS.toLocaleString()}</div><div class="sc-lbl">Critical/mo</div></div><div class="sc warn"><div class="sc-val">$${warnS.toLocaleString()}</div><div class="sc-lbl">Optimisable/mo</div></div><div class="sc info"><div class="sc-val">${pct}%</div><div class="sc-lbl">Waste Rate</div></div><div class="sc total"><div class="sc-val">$${(savings*12).toLocaleString()}</div><div class="sc-lbl">Annual Savings</div></div>`;
+  document.getElementById('priorityActions').innerHTML=leaks.slice(0,3).map((l,i)=>`<div class="action-item"><div class="action-num">${i+1}</div><div class="action-txt">${l.title} — <span class="action-save">saves $${l.savings}/mo</span>. ${l.fixes[0]}</div></div>`).join('')||'<div style="color:var(--ok);font-size:14px">✅ No critical actions.</div>';
+  document.getElementById('leaksContainer').innerHTML=leaks.length?leaks.map(l=>`<div class="lcard ${l.severity}"><div class="lcard-head" onclick="toggleLeak('${l.id}')"><div class="sdot"></div><div class="lcard-info"><div class="lcard-title">${l.title}</div><div class="lcard-res">${l.resource} · $${l.cost}/mo</div></div><div style="display:flex;align-items:center;gap:10px;flex-shrink:0"><div class="lcard-savings">-$${l.savings}/mo</div><div class="sbadge">${l.severity}</div></div></div><div class="lcard-body" id="leak-${l.id}"><p class="lcard-desc">${l.desc}</p><div class="fix-box"><div class="fix-ttl">📋 How to Fix</div>${l.fixes.map((f,i)=>`<div class="fix-step"><span class="fix-n">0${i+1}.</span><span>${f}</span></div>`).join('')}</div></div></div>`).join(''):'<div style="text-align:center;padding:48px;background:white;border:1px solid var(--border);border-radius:16px;color:var(--ok);box-shadow:0 2px 8px rgba(0,0,0,0.06)"><div style="font-size:48px;margin-bottom:12px">✅</div><div style="font-size:18px;font-weight:800">No waste patterns detected</div></div>';
+  window._leaks=leaks;window._list=list;window._savings=savings;
+  document.getElementById('ctaSaveVal').textContent='$'+savings.toLocaleString()+'/mo';
+  document.getElementById('ctaSaveAnn').textContent='$'+(savings*12).toLocaleString()+'/year';
+  const subj=encodeURIComponent('GCP Cost Audit — $'+savings+'/mo in savings found');
+  const body=encodeURIComponent('Hi Sinduja,\n\nI used GCPLeak and found $'+savings+'/month in GCP waste across '+leaks.length+' issues.\n\nCan you help?\n\nThanks!');
+  document.getElementById('ctaEmailBtn').href='mailto:sindujakalla@gmail.com?subject='+subj+'&body='+body;
+  document.getElementById('results').style.display='block';document.getElementById('results').scrollIntoView({behavior:'smooth'});
+}
+
+function toggleLeak(id){document.getElementById('leak-'+id).classList.toggle('open');}
+function resetTool(){document.getElementById('inputSection').style.display='block';document.getElementById('howSection').style.display='block';document.getElementById('results').style.display='none';resources=[];renderList();window.scrollTo({top:0,behavior:'smooth'});}
+function copyReport(){if(!window._leaks)return;const lines=['GCPLeak Cost Report','='+'='.repeat(28),'Date: '+new Date().toLocaleDateString(),'Savings: $'+window._savings+'/month','','LEAKS:',...window._leaks.map((l,i)=>`${i+1}. [${l.severity.toUpperCase()}] ${l.title} — $${l.savings}/mo\n   Fix: ${l.fixes[0]}`),'','GCPLeak™ — © 2026 Sinduja Kalla'];navigator.clipboard.writeText(lines.join('\n')).then(()=>alert('Copied!'));}
+function exportReport(){if(!window._leaks)return;const html=`<html><head><style>body{font-family:Arial;padding:40px;color:#333}h1{color:#1A73E8}.leak{margin:15px 0;padding:15px;border-left:4px solid;background:#f9f9f9}.critical{border-color:#EA4335}.warning{border-color:#FF8F00}.fix{background:#f0f0f0;padding:10px;margin-top:8px;font-size:13px}.total{background:#E8F0FE;padding:20px;border-radius:8px;margin:20px 0}</style></head><body><h1>🔍 GCPLeak Cost Report</h1><p>Generated: ${new Date().toLocaleString()}</p><div class="total"><strong>Resources:</strong> ${window._list.length}<br><strong>Monthly Savings:</strong> $${window._savings}/month<br><strong>Annual Savings:</strong> $${window._savings*12}/year</div><h2>Leaks</h2>${window._leaks.map(l=>`<div class="leak ${l.severity}"><strong>${l.title}</strong><br>Severity: ${l.severity.toUpperCase()} | $${l.savings}/mo<p>${l.desc}</p><div class="fix">${l.fixes.map((f,i)=>`${i+1}. ${f}`).join('<br>')}</div></div>`).join('')}<hr><p style="color:#999;font-size:12px">GCPLeak™ — © 2026 Sinduja Kalla. All Rights Reserved.</p></body></html>`;const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));a.download='gcp-leak-report.html';a.click();}
+</script>
+</body>
+</html>
