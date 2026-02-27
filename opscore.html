@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpsCore — AI Command Centre for DevOps & Infrastructure</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+:root{
+  --bg:#04070D;--bg1:#070C15;--bg2:#09101C;--bg3:#0D1626;
+  --border:#112238;--border2:#16304A;--border3:#1A3D5C;
+  --g:#0DFF8C;--g2:#0AE078;--g-dim:rgba(13,255,140,0.08);--g-mid:rgba(13,255,140,0.15);
+  --c:#00BFFF;--c-dim:rgba(0,191,255,0.08);
+  --y:#FFD234;--y-dim:rgba(255,210,52,0.08);
+  --r:#FF3E5E;--r-dim:rgba(255,62,94,0.08);
+  --o:#FF7A30;--p:#A855F7;--p-dim:rgba(168,85,247,0.08);
+  --text:#B8CDE0;--text2:#7A9AB8;--text3:#3D5970;--bright:#E4F2FF;
+  --font-mono:'JetBrains Mono',monospace;--font-ui:'Outfit',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:var(--font-mono);display:flex;flex-direction:column}
+#particles{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.particle{position:absolute;width:1px;height:60px;background:linear-gradient(to bottom,transparent,var(--g),transparent);opacity:0;animation:fall linear infinite}
+@keyframes fall{0%{transform:translateY(-60px);opacity:0}10%{opacity:0.4}90%{opacity:0.1}100%{transform:translateY(100vh);opacity:0}}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(13,255,140,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(13,255,140,0.018) 1px,transparent 1px);background-size:32px 32px}
+body::after{content:'';position:fixed;inset:0;z-index:1;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px)}
+.app{display:flex;flex-direction:column;height:100vh;position:relative;z-index:2}
+.titlebar{height:42px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:rgba(4,7,13,0.95);border-bottom:1px solid var(--border);backdrop-filter:blur(20px);position:relative}
+.titlebar::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 0%,var(--g) 30%,var(--c) 60%,transparent 100%);opacity:0.3}
+.tb-left{display:flex;align-items:center;gap:12px}
+.tb-dots{display:flex;gap:5px}
+.tb-dot{width:11px;height:11px;border-radius:50%;cursor:pointer}
+.tb-dot.r{background:#FF5F57;box-shadow:0 0 6px rgba(255,95,87,0.5)}
+.tb-dot.y{background:#FEBC2E;box-shadow:0 0 6px rgba(254,188,46,0.5)}
+.tb-dot.g{background:#28C840;box-shadow:0 0 6px rgba(40,200,64,0.5)}
+.tb-title{font-size:12px;font-weight:600;letter-spacing:2px;color:var(--text3);text-transform:uppercase}
+.tb-title span{color:var(--g);text-shadow:0 0 12px rgba(13,255,140,0.4)}
+.tb-right{display:flex;align-items:center;gap:10px}
+.tb-badge{font-size:9px;padding:3px 10px;border-radius:3px;font-family:var(--font-mono);letter-spacing:1px;text-transform:uppercase;border:1px solid var(--border2);color:var(--text3)}
+.tb-badge.live{border-color:rgba(13,255,140,0.3);color:var(--g);animation:livePulse 2s ease-in-out infinite}
+@keyframes livePulse{0%,100%{box-shadow:0 0 0 rgba(13,255,140,0)}50%{box-shadow:0 0 8px rgba(13,255,140,0.2)}}
+.tb-owner{font-size:10px;color:var(--text3);font-family:var(--font-mono)}
+.tb-owner b{color:var(--g)}
+.workspace{display:flex;flex:1;overflow:hidden}
+.sidebar{width:220px;flex-shrink:0;display:flex;flex-direction:column;background:var(--bg1);border-right:1px solid var(--border);overflow-y:auto;overflow-x:hidden}
+.sidebar::-webkit-scrollbar{width:2px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border2)}
+.sb-section{padding:12px 0;border-bottom:1px solid var(--border)}
+.sb-label{font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:2px;padding:0 14px 8px}
+.sb-item{display:flex;align-items:center;gap:9px;padding:7px 14px;cursor:pointer;transition:all 0.15s;font-size:11px;color:var(--text2);border-left:2px solid transparent;position:relative}
+.sb-item:hover{background:var(--g-dim);color:var(--text)}
+.sb-item.active{background:var(--g-dim);color:var(--g);border-left-color:var(--g)}
+.sb-item .sb-icon{width:16px;text-align:center;font-size:13px;flex-shrink:0}
+.sb-item .sb-name{font-weight:500;letter-spacing:0.3px}
+.sb-item .sb-hot{margin-left:auto;font-size:8px;padding:1px 5px;border-radius:2px;background:var(--bg3);border:1px solid var(--border2);color:var(--text3);font-family:var(--font-mono)}
+.mode-indicator{margin:0 10px 4px;padding:8px 10px;border-radius:5px;border:1px solid;font-size:10px;line-height:1.4;transition:all 0.2s}
+.snippet-list{display:flex;flex-direction:column;gap:3px;padding:0 8px}
+.snippet-item{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:6px 10px;cursor:pointer;transition:all 0.15s}
+.snippet-item:hover{border-color:var(--border3);background:var(--bg3)}
+.snippet-item .sn-name{font-size:10px;color:var(--bright);font-weight:600;margin-bottom:2px}
+.snippet-item .sn-cmd{font-size:9px;color:var(--text3);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.snippet-empty{font-size:10px;color:var(--text3);padding:8px 14px;line-height:1.6}
+.sb-save-btn{margin:8px;padding:7px;border-radius:4px;border:1px dashed var(--border2);background:transparent;color:var(--text3);font-family:var(--font-mono);font-size:10px;cursor:pointer;transition:all 0.15s;width:calc(100% - 16px);text-align:center}
+.sb-save-btn:hover{border-color:var(--g);color:var(--g);background:var(--g-dim)}
+.terminal{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.tab-bar{display:flex;align-items:center;gap:2px;padding:6px 12px 0;background:var(--bg1);border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{display:flex;align-items:center;gap:7px;padding:5px 14px 6px;border-radius:5px 5px 0 0;font-size:10px;cursor:pointer;transition:all 0.15s;border:1px solid transparent;border-bottom:none;color:var(--text3);font-family:var(--font-mono);position:relative;top:1px;letter-spacing:0.5px;background:transparent}
+.tab:hover{color:var(--text);background:var(--bg2)}
+.tab.active{background:var(--bg);border-color:var(--border);color:var(--bright)}
+.tab .tab-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.tab.active .tab-dot.g{background:var(--g);box-shadow:0 0 5px var(--g)}
+.tab.active .tab-dot.c{background:var(--c);box-shadow:0 0 5px var(--c)}
+.tab.active .tab-dot.y{background:var(--y);box-shadow:0 0 5px var(--y)}
+.new-tab-btn{margin-left:4px;width:24px;height:24px;border:1px dashed var(--border2);border-radius:4px;background:transparent;color:var(--text3);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;line-height:1}
+.new-tab-btn:hover{border-color:var(--g);color:var(--g)}
+.sessions{flex:1;overflow:hidden;position:relative}
+.session{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden}
+.session.active{display:flex}
+.output{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:0;scroll-behavior:smooth}
+.output::-webkit-scrollbar{width:4px}
+.output::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.welcome-block{padding:8px 0 16px;animation:fadeIn 0.4s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.welcome-ascii{font-size:10px;line-height:1.3;color:var(--g);text-shadow:0 0 10px rgba(13,255,140,0.3);margin-bottom:12px;font-family:var(--font-mono)}
+.sys-lines{display:flex;flex-direction:column;gap:2px;margin-bottom:16px}
+.sys-line{display:flex;gap:10px;font-size:11px;font-family:var(--font-mono)}
+.sys-line .sl-key{color:var(--text3);min-width:140px}
+.sys-line .sl-val{color:var(--text)}
+.sys-line .sl-val.ok{color:var(--g)}
+.slash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;margin-bottom:16px}
+.slash-card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;cursor:pointer;transition:all 0.15s}
+.slash-card:hover{border-color:var(--border3);background:var(--bg3);transform:translateY(-1px)}
+.slash-card .sc-cmd{font-size:11px;font-weight:700;color:var(--c);margin-bottom:3px;font-family:var(--font-mono)}
+.slash-card .sc-desc{font-size:10px;color:var(--text3);line-height:1.4}
+.prompt-examples{margin-top:4px}
+.pe-title{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
+.pe-list{display:flex;flex-direction:column;gap:4px}
+.pe-item{display:flex;align-items:center;gap:10px;font-size:11px;padding:5px 10px;background:var(--bg1);border:1px solid var(--border);border-radius:4px;cursor:pointer;transition:all 0.15s}
+.pe-item:hover{border-color:var(--g);background:var(--g-dim);color:var(--text)}
+.pe-item .pe-arrow{color:var(--g);font-size:10px}
+.pe-item .pe-text{color:var(--text2);font-family:var(--font-mono);font-size:10px}
+.msg-block{margin-bottom:2px;animation:msgIn 0.2s ease}
+@keyframes msgIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.cmd-line{display:flex;align-items:flex-start;gap:0;padding:6px 0 4px;font-size:12px;font-family:var(--font-mono);border-top:1px solid var(--border);margin-top:8px}
+.cmd-line:first-of-type{border-top:none;margin-top:0}
+.prompt-str{color:var(--text3);white-space:nowrap;margin-right:6px;flex-shrink:0;font-size:11px;padding-top:1px}
+.cmd-text{color:var(--bright);font-size:12px;word-break:break-all;flex:1}
+.ai-block{background:var(--bg1);border:1px solid var(--border);border-left:2px solid var(--g);border-radius:0 6px 6px 0;padding:14px 16px;margin:6px 0 4px;font-size:12px;line-height:1.8;color:var(--text);position:relative}
+.ai-block.pipeline-response{border-left-color:var(--c)}
+.ai-block.prod-response{border-left-color:var(--g)}
+.ai-block.api-response{border-left-color:var(--y)}
+.ai-block.repo-response{border-left-color:var(--p)}
+.ai-block.error-response{border-left-color:var(--r)}
+.ai-block-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.ai-block-icon{font-size:14px}
+.ai-block-title{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px}
+.ai-block-mode{margin-left:auto;font-size:8px;padding:2px 7px;border-radius:2px;border:1px solid;font-family:var(--font-mono);letter-spacing:0.5px;text-transform:uppercase;font-weight:700}
+.ai-content h3{font-size:10px;color:var(--g);text-transform:uppercase;letter-spacing:1.5px;margin:12px 0 6px;font-family:var(--font-ui);font-weight:700}
+.ai-content h3:first-child{margin-top:0}
+.ai-content strong{color:var(--bright);font-weight:600}
+.ai-content em{color:var(--c);font-style:normal}
+.ai-content pre{background:var(--bg);border:1px solid var(--border2);border-radius:5px;padding:12px 14px;margin:8px 0;overflow-x:auto;position:relative}
+.ai-content pre::before{content:attr(data-lang);position:absolute;top:6px;right:10px;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+.ai-content pre code{font-family:var(--font-mono);font-size:11px;line-height:1.6;color:var(--text)}
+.ai-content code{background:rgba(13,255,140,0.06);border:1px solid rgba(13,255,140,0.12);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);font-size:11px;color:var(--g)}
+.ai-content ul{padding-left:0;list-style:none;margin:4px 0}
+.ai-content li{padding:2px 0 2px 15px;position:relative;color:var(--text2);font-size:12px}
+.ai-content li::before{content:'▸';position:absolute;left:0;color:var(--g);font-size:9px;top:5px}
+.warn-line{color:var(--y)!important}
+.err-line{color:var(--r)!important}
+.ok-line{color:var(--g)!important}
+.sec-line{color:var(--o)!important}
+.ai-actions{display:flex;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border);flex-wrap:wrap}
+.ai-act-btn{font-size:9px;padding:4px 10px;border-radius:3px;border:1px solid var(--border2);background:var(--bg2);color:var(--text3);font-family:var(--font-mono);cursor:pointer;transition:all 0.15s;letter-spacing:0.5px}
+.ai-act-btn:hover{border-color:var(--g);color:var(--g);background:var(--g-dim)}
+.ai-act-btn.copy-done{color:var(--g);border-color:var(--g)}
+.typing-line{display:flex;align-items:center;gap:8px;padding:8px 0;font-size:11px;color:var(--text3);font-family:var(--font-mono)}
+.typing-dots{display:flex;gap:4px}
+.typing-dot{width:5px;height:5px;border-radius:50%;background:var(--g);animation:tdot 1.2s ease-in-out infinite}
+.typing-dot:nth-child(2){animation-delay:0.2s;background:var(--c)}
+.typing-dot:nth-child(3){animation-delay:0.4s;background:var(--y)}
+@keyframes tdot{0%,60%,100%{opacity:0.3;transform:scale(0.8)}30%{opacity:1;transform:scale(1.2)}}
+.typing-status{color:var(--text3);font-size:10px;animation:statusSwap 2s ease-in-out infinite}
+@keyframes statusSwap{0%,100%{opacity:1}50%{opacity:0.4}}
+.input-zone{flex-shrink:0;border-top:1px solid var(--border);background:var(--bg1)}
+.slash-hint{display:none;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--bg)}
+.slash-hint.show{display:flex;flex-wrap:wrap;gap:6px}
+.sh-chip{font-size:10px;padding:3px 9px;border-radius:3px;border:1px solid var(--border2);background:var(--bg2);color:var(--c);cursor:pointer;font-family:var(--font-mono);transition:all 0.15s}
+.sh-chip:hover{background:var(--c-dim);border-color:rgba(0,191,255,0.3)}
+.mode-bar{display:flex;align-items:center;gap:6px;padding:6px 14px;border-bottom:1px solid var(--border);overflow-x:auto}
+.mode-bar::-webkit-scrollbar{height:2px}
+.mode-bar::-webkit-scrollbar-thumb{background:var(--border2)}
+.mode-chip{display:flex;align-items:center;gap:5px;font-size:9px;padding:3px 10px;border-radius:3px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;white-space:nowrap;font-family:var(--font-mono);letter-spacing:0.5px;transition:all 0.15s}
+.mode-chip:hover{color:var(--text);border-color:var(--border2)}
+.mode-chip.selected{font-weight:700}
+.mode-chip.selected.m-pipeline{background:var(--c-dim);border-color:rgba(0,191,255,0.4);color:var(--c)}
+.mode-chip.selected.m-prod{background:var(--g-dim);border-color:rgba(13,255,140,0.4);color:var(--g)}
+.mode-chip.selected.m-api{background:var(--y-dim);border-color:rgba(255,210,52,0.4);color:var(--y)}
+.mode-chip.selected.m-repo{background:var(--p-dim);border-color:rgba(168,85,247,0.4);color:var(--p)}
+.mode-chip.selected.m-incident{background:var(--r-dim);border-color:rgba(255,62,94,0.4);color:var(--r)}
+.mode-chip.selected.m-terraform{background:rgba(168,85,247,0.1);border-color:rgba(168,85,247,0.4);color:var(--p)}
+.mode-chip.selected.m-docker{background:rgba(0,191,255,0.1);border-color:rgba(0,191,255,0.4);color:var(--c)}
+.mode-chip.selected.m-kube{background:rgba(255,122,48,0.1);border-color:rgba(255,122,48,0.4);color:var(--o)}
+.mode-chip.selected.m-cost{background:var(--g-dim);border-color:rgba(13,255,140,0.4);color:var(--g)}
+.mode-chip.selected.m-security{background:rgba(255,62,94,0.1);border-color:rgba(255,62,94,0.4);color:var(--r)}
+.mode-chip.selected.m-network{background:rgba(0,191,255,0.1);border-color:rgba(0,191,255,0.5);color:var(--c)}
+/* security response block */
+.security-response{border-left-color:var(--r)!important}
+.network-response{border-left-color:var(--c)!important}
+.mode-chip .mc-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.input-row{display:flex;align-items:flex-end;gap:8px;padding:10px 14px}
+.input-prompt{font-size:12px;color:var(--g);font-family:var(--font-mono);flex-shrink:0;padding-bottom:10px;text-shadow:0 0 8px rgba(13,255,140,0.4);white-space:nowrap}
+.main-input{flex:1;background:transparent;border:none;color:var(--bright);font-family:var(--font-mono);font-size:13px;outline:none;resize:none;line-height:1.5;max-height:120px;overflow-y:auto;caret-color:var(--g);min-height:36px;padding:8px 0}
+.main-input::placeholder{color:var(--text3);font-size:11px}
+.send-btn{width:36px;height:36px;flex-shrink:0;background:var(--g-mid);border:1px solid rgba(13,255,140,0.3);border-radius:5px;color:var(--g);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s}
+.send-btn:hover{background:rgba(13,255,140,0.25);box-shadow:0 0 14px rgba(13,255,140,0.2)}
+.send-btn:disabled{opacity:0.25;cursor:not-allowed}
+.input-meta{display:flex;align-items:center;justify-content:space-between;padding:0 14px 8px;font-size:9px;color:var(--text3);font-family:var(--font-mono)}
+.input-meta .im-left{display:flex;gap:12px;align-items:center}
+.input-meta .im-key{padding:1px 5px;border:1px solid var(--border);border-radius:2px;background:var(--bg2)}
+.snippet-overlay{display:none;position:fixed;inset:0;z-index:100;background:rgba(4,7,13,0.9);backdrop-filter:blur(8px);align-items:center;justify-content:center}
+.snippet-overlay.show{display:flex}
+.snippet-modal{width:560px;max-height:70vh;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.sm-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
+.sm-title{font-size:13px;font-weight:700;color:var(--bright);font-family:var(--font-ui)}
+.sm-close{background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer}
+.sm-body{flex:1;overflow-y:auto;padding:12px}
+.sm-save-form{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px}
+.sm-input{flex:1;background:var(--bg);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:7px 10px;outline:none}
+.sm-input:focus{border-color:var(--g)}
+.sm-save{padding:7px 14px;background:var(--g-mid);border:1px solid rgba(13,255,140,0.3);border-radius:4px;color:var(--g);font-family:var(--font-mono);font-size:11px;cursor:pointer}
+.saved-snippet-item{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--bg1);border:1px solid var(--border);border-radius:5px;margin-bottom:6px;cursor:pointer;transition:all 0.15s}
+.saved-snippet-item:hover{border-color:var(--g);background:var(--g-dim)}
+.ssi-name{font-size:12px;font-weight:600;color:var(--bright);min-width:120px}
+.ssi-content{font-size:10px;color:var(--text3);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.ssi-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0 4px}
+.ssi-del:hover{color:var(--r)}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+@media(max-width:768px){.sidebar{display:none}.tab-bar{overflow-x:auto}}
+</style>
+</head>
+<body>
+<div id="particles"></div>
+<div class="app">
+<div class="titlebar">
+  <div class="tb-left">
+    <div class="tb-dots"><div class="tb-dot r"></div><div class="tb-dot y"></div><div class="tb-dot g"></div></div>
+    <div class="tb-title"><span>OpsCore</span> // AI DEVOPS COMMAND CENTRE</div>
+  </div>
+  <div class="tb-right">
+    <div class="tb-badge live">● AI ONLINE</div>
+    <div class="tb-badge">v2.0</div>
+    <a href="https://sinduja1993.github.io/azureleak/built-by.html" target="_blank" style="text-decoration:none">
+      <div class="tb-owner" style="display:flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid rgba(0,255,136,0.2);border-radius:4px;background:rgba(0,255,136,0.05);transition:all 0.2s;cursor:pointer" onmouseover="this.style.borderColor='rgba(0,255,136,0.5)'" onmouseout="this.style.borderColor='rgba(0,255,136,0.2)'">
+        <span style="font-size:9px;color:var(--muted)">BUILT BY</span>
+        <b style="color:var(--g);text-shadow:0 0 8px rgba(0,255,136,0.4)">Sinduja Kalla</b>
+        <span style="font-size:8px;color:var(--muted);border-left:1px solid var(--border2);padding-left:7px">AZ-104 · DevOps</span>
+      </div>
+    </a>
+  </div>
+</div>
+<div class="workspace">
+<div class="sidebar">
+  <div class="sb-section">
+    <div class="sb-label">Mode</div>
+    <div id="mode-indicator" class="mode-indicator" style="background:rgba(13,255,140,0.06);border-color:rgba(13,255,140,0.2);color:var(--g)">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px;color:var(--text3)">Active Mode</div>
+      <div style="font-size:11px;font-weight:700" id="mode-indicator-text">🔄 Pipeline / CI/CD</div>
+    </div>
+    <div class="sb-item active" onclick="setMode('pipeline')"><span class="sb-icon">🔄</span><span class="sb-name">Pipeline</span><span class="sb-hot">/p</span></div>
+    <div class="sb-item" onclick="setMode('prod')"><span class="sb-icon">🟢</span><span class="sb-name">Production</span><span class="sb-hot">/prod</span></div>
+    <div class="sb-item" onclick="setMode('api')"><span class="sb-icon">⚡</span><span class="sb-name">API Debug</span><span class="sb-hot">/api</span></div>
+    <div class="sb-item" onclick="setMode('repo')"><span class="sb-icon">📦</span><span class="sb-name">Code Review</span><span class="sb-hot">/review</span></div>
+    <div class="sb-item" onclick="setMode('incident')"><span class="sb-icon">🚨</span><span class="sb-name">Incident RCA</span><span class="sb-hot">/rca</span></div>
+    <div class="sb-item" onclick="setMode('terraform')"><span class="sb-icon">🏗️</span><span class="sb-name">Terraform</span><span class="sb-hot">/tf</span></div>
+    <div class="sb-item" onclick="setMode('docker')"><span class="sb-icon">🐳</span><span class="sb-name">Docker/K8s</span><span class="sb-hot">/k8s</span></div>
+    <div class="sb-item" onclick="setMode('cost')"><span class="sb-icon">💰</span><span class="sb-name">Cloud Cost</span><span class="sb-hot">/cost</span></div>
+    <div class="sb-item" onclick="setMode('security')"><span class="sb-icon">🔒</span><span class="sb-name">Cloud Security</span><span class="sb-hot">/sec</span></div>
+    <div class="sb-item" onclick="setMode('network')"><span class="sb-icon">🌐</span><span class="sb-name">Cloud Network</span><span class="sb-hot">/net</span></div>
+  </div>
+  <div class="sb-section">
+    <div class="sb-label">Sessions</div>
+    <div class="sb-item active" id="sb-sess-0" onclick="switchSession(0)"><span class="sb-icon">🟢</span><span class="sb-name">Session 1</span></div>
+  </div>
+  <div class="sb-section" style="border-bottom:none;flex:1">
+    <div class="sb-label">Saved Snippets</div>
+    <div class="snippet-list" id="snippet-list"><div class="snippet-empty">No snippets saved yet.<br>After any AI response, click <b>Save</b> to keep it.</div></div>
+    <button class="sb-save-btn" onclick="openSnippets()">📚 View All Snippets</button>
+  </div>
+</div>
+<div class="terminal">
+  <div class="tab-bar" id="tab-bar">
+    <div class="tab active" id="tab-0" onclick="switchSession(0)">
+      <div class="tab-dot g"></div><span id="tab-name-0">session-1</span>
+    </div>
+    <button class="new-tab-btn" onclick="newSession()" title="New session">+</button>
+  </div>
+  <div class="sessions" id="sessions">
+    <div class="session active" id="session-0">
+      <div class="output" id="output-0">
+        <div class="welcome-block">
+          <div class="welcome-ascii"> ██████╗ ██████╗ ███████╗ ██████╗ ██████╗ ██████╗ ███████╗
+██╔═══██╗██╔══██╗██╔════╝██╔════╝██╔═══██╗██╔══██╗██╔════╝
+██║   ██║██████╔╝███████╗██║     ██║   ██║██████╔╝█████╗  
+██║   ██║██╔═══╝ ╚════██║██║     ██║   ██║██╔══██╗██╔══╝  
+╚██████╔╝██║     ███████║╚██████╗╚██████╔╝██║  ██║███████╗
+ ╚═════╝ ╚═╝     ╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝</div>
+          <div class="sys-lines">
+            <div class="sys-line"><span class="sl-key">AI Engine</span><span class="sl-val ok">Claude (Anthropic) — Online</span></div>
+            <div class="sys-line"><span class="sl-key">Specialisation</span><span class="sl-val">DevOps · Infrastructure · Cloud · CI/CD · K8s · IaC</span></div>
+            <div class="sys-line"><span class="sl-key">Cloud Coverage</span><span class="sl-val ok">Azure · AWS · GCP · Multi-Cloud</span></div>
+            <div class="sys-line"><span class="sl-key">Built by</span><span class="sl-val ok">Sinduja Kalla — AZ-104 · Azure Solutions Engineer</span></div>
+            <div class="sys-line"><span class="sl-key">Commands</span><span class="sl-val">Type / for slash commands · Ctrl+K clear · Ctrl+T new tab</span></div>
+          </div>
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Quick Slash Commands</div>
+          <div class="slash-grid">
+            <div class="slash-card" onclick="insertSlash('/debug ')"><div class="sc-cmd">/debug</div><div class="sc-desc">Debug any error — paste logs or describe the problem</div></div>
+            <div class="slash-card" onclick="insertSlash('/generate ')"><div class="sc-cmd">/generate</div><div class="sc-desc">Generate YAML, Terraform, Dockerfile, pipeline scripts</div></div>
+            <div class="slash-card" onclick="insertSlash('/review ')"><div class="sc-cmd">/review</div><div class="sc-desc">Code review with security issues + best practices</div></div>
+            <div class="slash-card" onclick="insertSlash('/explain ')"><div class="sc-cmd">/explain</div><div class="sc-desc">Explain any command, config, concept, or error</div></div>
+            <div class="slash-card" onclick="insertSlash('/fix ')"><div class="sc-cmd">/fix</div><div class="sc-desc">Fix broken code, config, pipeline, or manifest</div></div>
+            <div class="slash-card" onclick="insertSlash('/rca ')"><div class="sc-cmd">/rca</div><div class="sc-desc">Root cause analysis from incident logs or description</div></div>
+            <div class="slash-card" onclick="insertSlash('/compare ')"><div class="sc-cmd">/compare</div><div class="sc-desc">Compare tools, approaches, or cloud services honestly</div></div>
+            <div class="slash-card" onclick="insertSlash('/runbook ')"><div class="sc-cmd">/runbook</div><div class="sc-desc">Generate incident or deployment runbook template</div></div>
+            <div class="slash-card" onclick="insertSlash('/scan ')"><div class="sc-cmd">/scan</div><div class="sc-desc">Security scan — IAM, NSGs, exposed secrets, misconfigs</div></div>
+            <div class="slash-card" onclick="insertSlash('/harden ')"><div class="sc-cmd">/harden</div><div class="sc-desc">Harden VMs, containers, K8s, or cloud accounts</div></div>
+            <div class="slash-card" onclick="insertSlash('/audit ')"><div class="sc-cmd">/audit</div><div class="sc-desc">Compliance audit — CIS, SOC2, ISO27001, NIST</div></div>
+            <div class="slash-card" onclick="insertSlash('/nsg ')"><div class="sc-cmd">/nsg</div><div class="sc-desc">Analyse or generate NSG / Security Group rules</div></div>
+            <div class="slash-card" onclick="insertSlash('/peering ')"><div class="sc-cmd">/peering</div><div class="sc-desc">Design VNet/VPC peering, Transit Gateway, hub-spoke</div></div>
+            <div class="slash-card" onclick="insertSlash('/dns ')"><div class="sc-cmd">/dns</div><div class="sc-desc">Debug DNS resolution or design private DNS zones</div></div>
+            <div class="slash-card" onclick="insertSlash('/firewall ')"><div class="sc-cmd">/firewall</div><div class="sc-desc">Configure Azure Firewall, AWS SG, GCP firewall rules</div></div>
+          </div>
+          <div class="prompt-examples">
+            <div class="pe-title">Click any to run instantly</div>
+            <div class="pe-list">
+              <div class="pe-item" onclick="runExample('My pod is in CrashLoopBackOff after a deployment. Logs: Error: ECONNREFUSED 10.96.0.15:5432. What is the root cause and exact fix?')"><span class="pe-arrow">▸</span><span class="pe-text">/debug CrashLoopBackOff — ECONNREFUSED PostgreSQL</span></div>
+              <div class="pe-item" onclick="runExample('/generate GitHub Actions pipeline for Node.js: Docker multi-stage build, push to Azure Container Registry, deploy to AKS with Helm, dev/staging/prod environments with manual approval gates')"><span class="pe-arrow">▸</span><span class="pe-text">/generate GitHub Actions → ACR → AKS with approval gates</span></div>
+              <div class="pe-item" onclick="runExample('/review this Terraform for security issues:\nresource &quot;azurerm_storage_account&quot; &quot;main&quot; {\n  allow_blob_public_access  = true\n  min_tls_version           = &quot;TLS1_0&quot;\n  enable_https_traffic_only = false\n}')"><span class="pe-arrow">▸</span><span class="pe-text">/review Terraform storage account — security audit</span></div>
+              <div class="pe-item" onclick="runExample('/rca All production pods show OOMKilled since 14:32 UTC. Memory requests 256Mi, limits 512Mi. Load is normal. Last change: new deployment at 14:20. How do I fix and prevent this?')"><span class="pe-arrow">▸</span><span class="pe-text">/rca Production OOMKilled after deployment</span></div>
+              <div class="pe-item" onclick="runExample('/generate production Dockerfile for Python FastAPI: multi-stage build, non-root user, minimal image, health check endpoint, proper layer caching')"><span class="pe-arrow">▸</span><span class="pe-text">/generate production Dockerfile — Python FastAPI</span></div>
+              <div class="pe-item" onclick="runExample('/explain the difference between Kubernetes liveness probe and readiness probe — when to use each, and give me example YAML for a Node.js HTTP API')"><span class="pe-arrow">▸</span><span class="pe-text">/explain liveness vs readiness probes with YAML examples</span></div>
+              <div class="pe-item" onclick="runExample('/generate complete Terraform module for AKS cluster: 3 node pools (system, user, spot), private cluster, Azure CNI, RBAC with Azure AD, Key Vault integration, container insights')"><span class="pe-arrow">▸</span><span class="pe-text">/generate Terraform AKS module — production-ready</span></div>
+              <div class="pe-item" onclick="runExample('/compare blue-green deployment vs canary deployment vs rolling update for a microservices app on Kubernetes — pros, cons, when to use each, give Helm/Argo Rollouts examples')"><span class="pe-arrow">▸</span><span class="pe-text">/compare blue-green vs canary vs rolling — K8s deploys</span></div>
+              <div class="pe-item" onclick="setMode('security');runExample('/scan my Azure subscription has these resources: storage accounts with public access, VMs with port 22 open to 0.0.0.0/0, no MFA enforced, service principals with Owner role. What are the critical risks and exact fixes?')"><span class="pe-arrow" style="color:var(--r)">▸</span><span class="pe-text" style="color:var(--r)">/scan Azure security — public storage, SSH open, no MFA</span></div>
+              <div class="pe-item" onclick="setMode('security');runExample('/harden a production Kubernetes cluster on AKS: RBAC, network policies, pod security standards, secrets management with Key Vault, image scanning with Defender for Containers')"><span class="pe-arrow" style="color:var(--r)">▸</span><span class="pe-text" style="color:var(--r)">/harden AKS cluster — RBAC, network policies, secrets</span></div>
+              <div class="pe-item" onclick="setMode('security');runExample('/audit our infrastructure against CIS Azure Benchmark Level 2 — we have AKS, Azure SQL, Storage Accounts, App Service. Give me a checklist with pass/fail for each control')"><span class="pe-arrow" style="color:var(--r)">▸</span><span class="pe-text" style="color:var(--r)">/audit CIS Azure Benchmark L2 — AKS, SQL, Storage</span></div>
+              <div class="pe-item" onclick="setMode('network');runExample('/peering Design a hub-spoke VNet architecture for Azure: 1 hub VNet with Azure Firewall and VPN Gateway, 3 spoke VNets (prod, staging, dev), private DNS, forced tunnelling through firewall. Give Terraform code.')"><span class="pe-arrow" style="color:var(--c)">▸</span><span class="pe-text" style="color:var(--c)">/peering Azure hub-spoke with Firewall + VPN — Terraform</span></div>
+              <div class="pe-item" onclick="setMode('network');runExample('/dns I have a microservices app on AKS. External DNS is not resolving. Internal service discovery between pods is broken. CoreDNS logs show: SERVFAIL. Debug this and fix my DNS setup.')"><span class="pe-arrow" style="color:var(--c)">▸</span><span class="pe-text" style="color:var(--c)">/dns CoreDNS SERVFAIL — debug AKS internal DNS</span></div>
+              <div class="pe-item" onclick="setMode('network');runExample('/nsg Review these NSG rules and find security issues:\nPriority 100: Allow Any Any 22 Inbound\nPriority 200: Allow Any Any 3389 Inbound\nPriority 300: Allow Any Any * Inbound\nPriority 65000: Allow VirtualNetwork VirtualNetwork * Inbound')"><span class="pe-arrow" style="color:var(--c)">▸</span><span class="pe-text" style="color:var(--c)">/nsg Review NSG rules — find security holes</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="input-zone">
+    <div class="slash-hint" id="slash-hint"></div>
+    <div class="mode-bar">
+      <div class="mode-chip m-pipeline selected" id="mc-pipeline" onclick="setMode('pipeline')"><span class="mc-dot"></span>Pipeline</div>
+      <div class="mode-chip m-prod" id="mc-prod" onclick="setMode('prod')"><span class="mc-dot"></span>Production</div>
+      <div class="mode-chip m-api" id="mc-api" onclick="setMode('api')"><span class="mc-dot"></span>API</div>
+      <div class="mode-chip m-repo" id="mc-repo" onclick="setMode('repo')"><span class="mc-dot"></span>Code Review</div>
+      <div class="mode-chip m-incident" id="mc-incident" onclick="setMode('incident')"><span class="mc-dot"></span>Incident</div>
+      <div class="mode-chip m-terraform" id="mc-terraform" onclick="setMode('terraform')"><span class="mc-dot"></span>Terraform</div>
+      <div class="mode-chip m-docker" id="mc-docker" onclick="setMode('docker')"><span class="mc-dot"></span>Docker/K8s</div>
+      <div class="mode-chip m-kube" id="mc-kube" onclick="setMode('kube')"><span class="mc-dot"></span>kubectl</div>
+      <div class="mode-chip m-cost" id="mc-cost" onclick="setMode('cost')"><span class="mc-dot"></span>Cloud Cost</div>
+      <div class="mode-chip m-security" id="mc-security" onclick="setMode('security')"><span class="mc-dot"></span>🔒 Security</div>
+      <div class="mode-chip m-network" id="mc-network" onclick="setMode('network')"><span class="mc-dot"></span>🌐 Network</div>
+    </div>
+    <div class="input-row">
+      <div class="input-prompt" id="input-prompt">ops@core <span style="color:var(--c)">~/pipeline</span> <span style="color:var(--g)">$</span></div>
+      <textarea class="main-input" id="main-input" placeholder="Type a question, paste logs/YAML/code, or use /slash commands..." onkeydown="handleKey(event)" oninput="handleInput(event)" rows="1"></textarea>
+      <button class="send-btn" id="send-btn" onclick="sendMessage()">↑</button>
+    </div>
+    <div class="input-meta">
+      <div class="im-left">
+        <span><span class="im-key">Enter</span> send</span>
+        <span><span class="im-key">Shift+Enter</span> newline</span>
+        <span><span class="im-key">/</span> commands</span>
+        <span><span class="im-key">Ctrl+K</span> clear</span>
+        <span><span class="im-key">Ctrl+T</span> new tab</span>
+      </div>
+      <span id="char-count" style="color:var(--text3)">0 chars</span>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<div class="snippet-overlay" id="snippet-overlay" onclick="closeSnippets(event)">
+  <div class="snippet-modal" onclick="event.stopPropagation()">
+    <div class="sm-header">
+      <div class="sm-title">📚 Saved Snippets</div>
+      <button class="sm-close" onclick="closeSnippets()">✕</button>
+    </div>
+    <div class="sm-body" id="sm-body"></div>
+    <div class="sm-save-form">
+      <input class="sm-input" id="sm-name" placeholder="Snippet name..." />
+      <button class="sm-save" onclick="saveCurrentSnippet()">Save Last Response</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){const c=document.getElementById('particles');for(let i=0;i<12;i++){const p=document.createElement('div');p.className='particle';p.style.cssText=`left:${Math.random()*100}%;animation-duration:${4+Math.random()*6}s;animation-delay:${Math.random()*8}s;height:${40+Math.random()*80}px`;c.appendChild(p);}})();
+
+const MODES={
+  pipeline:{label:'🔄 Pipeline / CI/CD',color:'var(--c)',dir:'pipeline',responseClass:'pipeline-response'},
+  prod:{label:'🟢 Production Health',color:'var(--g)',dir:'production',responseClass:'prod-response'},
+  api:{label:'⚡ API Debugger',color:'var(--y)',dir:'api',responseClass:'api-response'},
+  repo:{label:'📦 Code Review',color:'var(--p)',dir:'review',responseClass:'repo-response'},
+  incident:{label:'🚨 Incident RCA',color:'var(--r)',dir:'incident',responseClass:'error-response'},
+  terraform:{label:'🏗️ Terraform / IaC',color:'var(--p)',dir:'terraform',responseClass:'repo-response'},
+  docker:{label:'🐳 Docker / K8s',color:'var(--c)',dir:'k8s',responseClass:'pipeline-response'},
+  kube:{label:'⛵ kubectl Expert',color:'var(--o)',dir:'kubectl',responseClass:'pipeline-response'},
+  cost:{label:'💰 Cloud Cost',color:'var(--g)',dir:'cost',responseClass:'prod-response'},
+  security:{label:'🔒 Cloud Security',color:'var(--r)',dir:'security',responseClass:'security-response'},
+  network:{label:'🌐 Cloud Network',color:'var(--c)',dir:'network',responseClass:'network-response'},
+};
+
+let currentMode='pipeline';
+let sessions=[{id:0,name:'session-1',history:[],lastResponse:''}];
+let currentSession=0;
+let isLoading=false;
+let snippets=[];
+try{snippets=JSON.parse(localStorage.getItem('opscore-snippets')||'[]');}catch(e){}
+
+const SYSTEM=`You are OpsCore AI — a battle-hardened senior DevOps, cloud security, and network engineer. Built by Sinduja Kalla (AZ-104, Azure Solutions Engineer). You think like someone who has been paged at 3am, led security audits under pressure, designed enterprise networks, and written Terraform that runs at scale. No fluff. Dense, actionable, production-quality answers only.
+
+DEVOPS & INFRASTRUCTURE EXPERTISE:
+• CI/CD: Azure DevOps, GitHub Actions, GitLab CI, Jenkins, ArgoCD, Flux
+• Containers: Docker (multi-stage, security, optimisation), Docker Compose
+• Kubernetes: AKS, EKS, GKE — deployments, HPA, PDB, RBAC, network policies, ingress, Istio/Linkerd, KEDA, Helm, Kustomize
+• IaC: Terraform, Bicep, ARM, Pulumi, Ansible
+• Cloud: Azure (full), AWS (full), GCP (full)
+• Monitoring: Prometheus, Grafana, Loki, Tempo, Azure Monitor, CloudWatch, Datadog
+
+CLOUD SECURITY EXPERTISE:
+• Identity & Access: Azure AD/Entra ID, AWS IAM, GCP IAM — RBAC, PIM, Managed Identities, least-privilege, MFA, Conditional Access
+• Secrets Management: Azure Key Vault, AWS Secrets Manager, HashiCorp Vault, SOPS, Sealed Secrets, External Secrets Operator
+• Container Security: Trivy, Grype, Snyk, Defender for Containers — image scanning, signing, non-root, read-only FS, seccomp, AppArmor
+• Kubernetes Security: OPA/Gatekeeper, Kyverno, Pod Security Standards/Admission, network policies, RBAC auditing, audit logging
+• IaC Security Scanning: Checkov, tfsec, Snyk IaC — exposed secrets, public resources, open ports, overprivileged roles
+• Compliance: CIS Benchmarks (Azure/AWS/GCP L1+L2), SOC2, ISO 27001, NIST 800-53, PCI-DSS, HIPAA
+• Threat Detection: Microsoft Defender for Cloud, AWS Security Hub, GCP SCC, GuardDuty, Sentinel, SIEM integration
+• Zero Trust: micro-segmentation, mTLS, service mesh security, BeyondCorp model, identity-based perimeter
+• SAST/DAST/SBOM: SonarQube, OWASP ZAP, Trivy SBOM, GitHub Advanced Security, dependency scanning pipelines
+• WAF & DDoS: Azure Application Gateway WAF, AWS WAF, GCP Cloud Armor, DDoS Protection Standard
+
+SLASH COMMANDS for security mode:
+/scan → systematic findings: CRITICAL/HIGH/MEDIUM/LOW severity, exact remediation, affected resources
+/harden → before config + hardened config side-by-side, explain every control added
+/audit → named framework checklist (CIS/SOC2/NIST/PCI) with PASS / FAIL / PARTIAL per control + evidence
+/pentest → attack path: entry → lateral movement → blast radius, then mitigations per step
+/zerotrust → Zero Trust architecture design with explicit trust boundaries, identity verification flows
+/scan → detect exposed secrets in pasted code immediately
+
+CLOUD NETWORKING EXPERTISE:
+• Azure: VNet, Subnet, NSG, ASG, UDR, VNet Peering, Private Endpoints, Private Link, ExpressRoute, VPN Gateway, Azure Firewall, Application Gateway, Front Door, Traffic Manager, Azure DNS, Private DNS Zones, Bastion, NAT Gateway, DDoS Standard, Network Watcher
+• AWS: VPC, Subnet, Security Groups, NACLs, Route Tables, VPC Peering, Transit Gateway, PrivateLink, Direct Connect, VPN, ALB/NLB/CLB, Route 53, CloudFront, WAF, NAT Gateway, Internet Gateway, Egress-Only IGW, Flow Logs
+• GCP: VPC, Subnets, Firewall Rules, VPC Peering, Shared VPC, Private Service Connect, Cloud Interconnect, Cloud VPN, Cloud Load Balancing, Cloud Armor, Cloud DNS, Cloud NAT, Cloud CDN, VPC Flow Logs
+• Architecture Patterns: Hub-Spoke (Azure), Transit VPC/Gateway (AWS), Shared VPC (GCP), East-West vs North-South, forced tunnelling, BGP routing, CIDR planning, IPv6 dual-stack
+• DNS: Azure Private DNS, Route 53 Resolver, CoreDNS (K8s), split-horizon, DNS forwarding chains, conditional forwarders, service discovery
+• Load Balancing: L4 vs L7, session affinity, health probes, SSL termination, WAF integration, global vs regional, cross-zone
+• Private Connectivity: Site-to-Site VPN (IKEv2), P2S VPN (SSTP/OpenVPN), ExpressRoute circuits, Direct Connect, Dedicated Interconnect
+• Network Monitoring: NSG Flow Logs, Network Watcher, packet capture, connection monitor, Traffic Analytics, VPC Flow Logs
+
+SLASH COMMANDS for network mode:
+/nsg → analyse rules: flag dangerous rules (ANY/ANY, 0.0.0.0/0, RDP/SSH to internet), generate hardened replacement
+/peering → ASCII architecture diagram + full Terraform/Bicep code, include route tables and firewall rules
+/dns → structured debug checklist: local resolver → CoreDNS → forwarder → upstream, exact dig/nslookup/kubectl commands
+/firewall → generate full firewall policy with rule sets, priority order, IDPS settings, threat intelligence
+/lb → tier selection rationale + full config: health probes, backend pools, SSL cert, WAF rules
+/vpn → IKE/IPsec parameters, BGP config, failover design, monitoring setup
+
+RESPONSE FORMAT:
+• ### for section headers
+• \\\`\\\`\\\`yaml \\\`\\\`\\\`bash \\\`\\\`\\\`terraform \\\`\\\`\\\`json for ALL code — always with language tag
+• Inline \\\`code\\\` for commands, ports, CIDRs, resource names
+• 🔴 CRITICAL: | ⚠️ WARNING: | ✅ GOOD: | 💡 TIP: | 🔒 SECURITY: | 🌐 NETWORK: on issue lines
+• Security findings: always include severity (CRITICAL/HIGH/MEDIUM/LOW) + exact remediation command/config
+• Network designs: always include actual CIDR ranges, port numbers, protocols — never vague
+• End every response with ### NEXT STEPS — 3 prioritised, specific actions
+• Hardcoded secrets in pasted code: flag IMMEDIATELY as 🔴 CRITICAL: EXPOSED SECRET before anything else
+
+If asked about the creator: "OpsCore was built by Sinduja Kalla, Azure Solutions Engineer. sindujakalla@gmail.com"
+If asked about other tools: AzureLeak™ AWSLeak™ GCPLeak™ at sinduja1993.github.io/azureleak`;
+
+function setMode(mode){
+  currentMode=mode;
+  const m=MODES[mode];
+  document.getElementById('input-prompt').innerHTML=`<span style="color:var(--text3)">ops@core ~/</span><span style="color:var(--c)">${m.dir}</span> <span style="color:var(--g)">$</span>`;
+  document.getElementById('mode-indicator-text').textContent=m.label;
+  document.getElementById('mode-indicator').style.cssText=`background:${m.color.replace('var(','').replace(')','').includes('#')||m.color.startsWith('rgba')?m.color+'20':m.color.replace(')',',0.08)')};border-color:${m.color.replace(')',',0.3)')};color:${m.color}`;
+  document.querySelectorAll('.sb-item').forEach(el=>el.classList.toggle('active',el.getAttribute('onclick')===`setMode('${mode}')`));
+  document.querySelectorAll('.mode-chip').forEach(el=>el.classList.remove('selected'));
+  const chip=document.getElementById('mc-'+mode);
+  if(chip)chip.classList.add('selected');
+  document.getElementById('main-input').focus();
+}
+
+const SLASH_COMMANDS={'/debug':'Debug errors — paste logs or describe','/generate':'Generate complete code/YAML/configs','/review':'Security + best practice code review','/explain':'Explain concepts, commands, configs','/fix':'Fix broken code or config','/rca':'Root cause analysis from incident','/compare':'Compare tools/approaches honestly','/runbook':'Generate incident/deployment runbook','/optimize':'Optimize for performance or cost','/scan':'Security scan — IAM, NSG, policies, secrets','/pentest':'Simulate attack path and find vulnerabilities','/harden':'Harden resource: VM, K8s, container, network','/zerotrust':'Design Zero Trust architecture','/audit':'Compliance audit — CIS, SOC2, ISO27001, NIST','/nsg':'Analyse or generate NSG/Security Group rules','/peering':'Design VNet/VPC peering or Transit Gateway','/dns':'Debug or design DNS architecture','/lb':'Design load balancer and traffic routing','/firewall':'Configure cloud firewall rules','/vpn':'Set up VPN or private connectivity','/p':'→ Pipeline mode','/prod':'→ Production mode','/api':'→ API mode','/tf':'→ Terraform mode','/k8s':'→ Docker/K8s mode','/sec':'→ Security mode','/net':'→ Network mode'};
+
+function handleInput(e){
+  const val=e.target.value;
+  e.target.style.height='auto';
+  e.target.style.height=Math.min(e.target.scrollHeight,120)+'px';
+  document.getElementById('char-count').textContent=val.length+' chars';
+  const hint=document.getElementById('slash-hint');
+  if(val.startsWith('/')&&val.length<25){
+    const q=val.toLowerCase();
+    const matches=Object.entries(SLASH_COMMANDS).filter(([k])=>k.startsWith(q));
+    if(matches.length){
+      hint.className='slash-hint show';
+      hint.innerHTML=matches.map(([k,v])=>`<div class="sh-chip" onclick="insertSlash('${k} ')" title="${v}">${k}</div>`).join('');
+    }else{hint.className='slash-hint';}
+  }else{hint.className='slash-hint';}
+}
+
+function insertSlash(cmd){
+  const inp=document.getElementById('main-input');
+  inp.value=cmd;inp.focus();
+  document.getElementById('slash-hint').className='slash-hint';
+  const modeMap={'/p ':'pipeline','/prod ':'prod','/api ':'api','/tf ':'terraform','/k8s ':'docker','/rca ':'incident','/sec ':'security','/net ':'network'};
+  if(modeMap[cmd])setMode(modeMap[cmd]);
+}
+
+function handleKey(e){
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}
+  if(e.key==='k'&&(e.ctrlKey||e.metaKey)){e.preventDefault();clearSession();}
+}
+function runExample(text){document.getElementById('main-input').value=text;sendMessage();}
+
+let sessionCount=1;
+function newSession(){
+  const id=sessionCount++;
+  sessions.push({id,name:`session-${id}`,history:[],lastResponse:''});
+  const tabBar=document.getElementById('tab-bar');
+  const newBtn=tabBar.querySelector('.new-tab-btn');
+  const tab=document.createElement('div');
+  tab.className='tab';tab.id=`tab-${id}`;tab.onclick=()=>switchSession(id);
+  tab.innerHTML=`<div class="tab-dot c"></div><span>session-${id}</span>`;
+  tabBar.insertBefore(tab,newBtn);
+  const sessEl=document.createElement('div');
+  sessEl.className='session';sessEl.id=`session-${id}`;
+  sessEl.innerHTML=`<div class="output" id="output-${id}"><div style="font-size:11px;color:var(--text3);padding:12px 0;font-family:var(--font-mono)"><span style="color:var(--g)">✓</span> New session — ${new Date().toLocaleTimeString()}<br><span style="color:var(--text3)">Type a question or use /slash commands</span></div></div>`;
+  document.getElementById('sessions').appendChild(sessEl);
+  switchSession(id);
+}
+
+function switchSession(id){
+  currentSession=id;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.session').forEach(s=>s.classList.remove('active'));
+  const tab=document.getElementById('tab-'+id);
+  const sess=document.getElementById('session-'+id);
+  if(tab)tab.classList.add('active');
+  if(sess)sess.classList.add('active');
+}
+
+function clearSession(){
+  const out=document.getElementById('output-'+currentSession);
+  if(out)out.innerHTML=`<div style="font-size:11px;color:var(--text3);padding:4px 0;font-family:var(--font-mono)"><span style="color:var(--g)">✓</span> Cleared — ${new Date().toLocaleTimeString()}</div>`;
+  const s=sessions.find(s=>s.id===currentSession);
+  if(s)s.history=[];
+}
+
+async function sendMessage(){
+  const inp=document.getElementById('main-input');
+  let text=inp.value.trim();
+  if(!text||isLoading)return;
+  const modeShortcuts={'//p':'pipeline','//prod':'prod','//api':'api','//tf':'terraform','//k8s':'docker','//rca':'incident'};
+  for(const[k,v]of Object.entries(modeShortcuts)){if(text.toLowerCase()===k){setMode(v);inp.value='';inp.style.height='auto';return;}}
+
+  isLoading=true;
+  document.getElementById('send-btn').disabled=true;
+  inp.value='';inp.style.height='auto';
+  document.getElementById('char-count').textContent='0 chars';
+
+  const output=document.getElementById('output-'+currentSession);
+  const sess=sessions.find(s=>s.id===currentSession)||sessions[0];
+  const mInfo=MODES[currentMode];
+
+  const cmdEl=document.createElement('div');
+  cmdEl.className='msg-block';
+  cmdEl.innerHTML=`<div class="cmd-line"><span class="prompt-str"><span style="color:var(--g)">ops</span><span style="color:var(--text3)">@core ~/</span><span style="color:var(--c)">${mInfo.dir}</span> <span style="color:var(--g)">$ </span></span><span class="cmd-text">${escHtml(text)}</span></div>`;
+  output.appendChild(cmdEl);
+
+  const typingEl=document.createElement('div');
+  typingEl.className='typing-line';
+  const stats=['Analyzing...','Cross-referencing docs...','Checking best practices...','Generating response...','Almost done...'];
+  let si=0;
+  typingEl.innerHTML=`<div class="typing-dots"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div><span class="typing-status" id="ts">${stats[0]}</span>`;
+  output.appendChild(typingEl);
+  output.scrollTop=output.scrollHeight;
+  const iv=setInterval(()=>{si=(si+1)%stats.length;const el=document.getElementById('ts');if(el)el.textContent=stats[si];},1800);
+
+  sess.history.push({role:'user',content:`[MODE: ${currentMode.toUpperCase()} — ${mInfo.label}]\n\n${text}`});
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:SYSTEM,messages:sess.history.slice(-16)})});
+    const data=await res.json();
+    const reply=data.content?.map(b=>b.text||'').join('')||'Error: empty response';
+    sess.history.push({role:'assistant',content:reply});
+    sess.lastResponse=reply;
+    clearInterval(iv);typingEl.remove();
+    const rid='r'+Date.now();
+    const respEl=document.createElement('div');
+    respEl.className='msg-block';
+    respEl.innerHTML=`<div class="ai-block ${mInfo.responseClass}" id="${rid}">
+      <div class="ai-block-header">
+        <span class="ai-block-icon">🤖</span>
+        <span class="ai-block-title">OpsCore AI</span>
+        <div class="ai-block-mode" style="color:${mInfo.color};border-color:${mInfo.color}30;background:${mInfo.color}10">${mInfo.label}</div>
+      </div>
+      <div class="ai-content">${formatMd(reply)}</div>
+      <div class="ai-actions">
+        <button class="ai-act-btn" onclick="copyResp('${rid}',this)">📋 Copy</button>
+        <button class="ai-act-btn" onclick="saveFromResp('${rid}')">💾 Save Snippet</button>
+        <button class="ai-act-btn" onclick="followUp('${rid}')">↩ Follow-up</button>
+      </div>
+    </div>`;
+    output.appendChild(respEl);
+    output.scrollTop=output.scrollHeight;
+  }catch(err){
+    clearInterval(iv);typingEl.remove();
+    const errEl=document.createElement('div');
+    errEl.className='msg-block';
+    errEl.innerHTML=`<div class="ai-block error-response"><div class="ai-block-header"><span>⚠</span><span class="ai-block-title">Connection Error</span></div><div class="ai-content"><span class="err-line">Network error — check connection. ${escHtml(err.message)}</span></div></div>`;
+    output.appendChild(errEl);
+    output.scrollTop=output.scrollHeight;
+  }
+  isLoading=false;
+  document.getElementById('send-btn').disabled=false;
+  document.getElementById('main-input').focus();
+}
+
+function copyResp(id,btn){
+  const el=document.getElementById(id);
+  if(!el)return;
+  navigator.clipboard.writeText(el.querySelector('.ai-content').innerText).then(()=>{btn.textContent='✓ Copied';btn.classList.add('copy-done');setTimeout(()=>{btn.textContent='📋 Copy';btn.classList.remove('copy-done')},2000);});
+}
+function saveFromResp(id){
+  const el=document.getElementById(id);if(!el)return;
+  const content=el.querySelector('.ai-content').innerText;
+  const name=prompt('Snippet name:','snippet-'+new Date().toISOString().slice(0,10));
+  if(!name)return;
+  snippets.unshift({name,content,date:new Date().toISOString(),mode:currentMode});
+  try{localStorage.setItem('opscore-snippets',JSON.stringify(snippets));}catch(e){}
+  renderSnippets();
+}
+function followUp(id){
+  const el=document.getElementById(id);if(!el)return;
+  document.getElementById('main-input').value='/debug Can you go deeper on: '+el.querySelector('.ai-content').innerText.slice(0,80)+'...';
+  document.getElementById('main-input').focus();
+}
+
+function renderSnippets(){
+  const el=document.getElementById('snippet-list');
+  if(!snippets.length){el.innerHTML='<div class="snippet-empty">No snippets saved yet.<br>Click <b>Save Snippet</b> after any response.</div>';return;}
+  el.innerHTML=snippets.slice(0,5).map((s,i)=>`<div class="snippet-item" onclick="useSnippet(${i})"><div class="sn-name">${escHtml(s.name)}</div><div class="sn-cmd">${escHtml(s.content.slice(0,60))}</div></div>`).join('');
+}
+function useSnippet(i){document.getElementById('main-input').value='Based on this saved snippet:\n'+snippets[i].content.slice(0,400);document.getElementById('main-input').focus();}
+
+function openSnippets(){
+  document.getElementById('snippet-overlay').classList.add('show');
+  const body=document.getElementById('sm-body');
+  if(!snippets.length){body.innerHTML='<div style="color:var(--text3);font-size:11px;font-family:var(--font-mono);padding:8px">No snippets yet.</div>';return;}
+  body.innerHTML=snippets.map((s,i)=>`<div class="saved-snippet-item" onclick="navigator.clipboard.writeText(snippets[${i}].content)"><span class="ssi-name">${escHtml(s.name)}</span><span class="ssi-content">${escHtml(s.content.slice(0,70))}</span><button class="ssi-del" onclick="event.stopPropagation();deleteSnippet(${i})">✕</button></div>`).join('');
+}
+function closeSnippets(e){if(!e||e.target===document.getElementById('snippet-overlay'))document.getElementById('snippet-overlay').classList.remove('show');}
+function deleteSnippet(i){snippets.splice(i,1);try{localStorage.setItem('opscore-snippets',JSON.stringify(snippets));}catch(e){}renderSnippets();openSnippets();}
+function saveCurrentSnippet(){
+  const name=document.getElementById('sm-name').value.trim();
+  const sess=sessions.find(s=>s.id===currentSession)||sessions[0];
+  if(!name||!sess.lastResponse){alert('Add a name and make sure there is a response to save.');return;}
+  snippets.unshift({name,content:sess.lastResponse,date:new Date().toISOString(),mode:currentMode});
+  try{localStorage.setItem('opscore-snippets',JSON.stringify(snippets));}catch(e){}
+  renderSnippets();document.getElementById('sm-name').value='';openSnippets();
+}
+
+function formatMd(t){
+  return t
+    .replace(/```(\w+)?\n?([\s\S]*?)```/g,(_,lang,code)=>`<pre data-lang="${lang||'code'}"><code>${escHtml(code.trim())}</code></pre>`)
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/`([^`\n]+)`/g,'<code>$1</code>')
+    .replace(/^[-•] (.+)$/gm,'<li>$1</li>')
+    .replace(/^(\d+)\. (.+)$/gm,'<li>$2</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g,m=>`<ul>${m}</ul>`)
+    .replace(/🔴 CRITICAL:/g,'<span class="err-line">🔴 CRITICAL:</span>')
+    .replace(/⚠️ WARNING:/g,'<span class="warn-line">⚠️ WARNING:</span>')
+    .replace(/✅ GOOD:/g,'<span class="ok-line">✅ GOOD:</span>')
+    .replace(/✅ BEST PRACTICE:/g,'<span class="ok-line">✅ BEST PRACTICE:</span>')
+    .replace(/🔒 SECURITY:/g,'<span class="sec-line">🔒 SECURITY:</span>')
+    .replace(/💡 TIP:/g,'<span style="color:var(--c)">💡 TIP:</span>')
+    .replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>');
+}
+function escHtml(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();clearSession();}
+  if((e.ctrlKey||e.metaKey)&&e.key==='t'){e.preventDefault();newSession();}
+  if(!e.ctrlKey&&!e.metaKey&&!e.altKey&&e.key.length===1){
+    const inp=document.getElementById('main-input');
+    if(document.activeElement!==inp)inp.focus();
+  }
+});
+
+renderSnippets();setMode('pipeline');
+document.getElementById('main-input').focus();
+</script>
+</body>
+</html>
